@@ -103,14 +103,14 @@ export default function Home() {
       notes: notes || null, image_path
     };
     const result = editingId
-      ? await supabase.from("collections").update(payload).eq("id", editingId).eq("user_id", session.user.id)
+      ? await supabase.from("collections").update(payload).eq("id", editingId)
       : await supabase.from("collections").insert({ ...payload, user_id: session.user.id });
     setBusy(false);
     if (result.error) setMessage(result.error.message);
     else {
       setPlaceName(""); setPlaceCountry(""); setPlaceCity(""); setPlaceRegion(""); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null);
       setEditingId(null); setExistingImagePath(null); setShowSaveForm(false);
-      setMessage(editingId ? "收藏已更新。" : duplicate ? "已新增收藏。提醒：找到名稱及地址相同的既有收藏，請確認是否重複。" : "收藏成功！");
+      setMessage(editingId ? "收藏已更新，家庭成員都能看到。" : duplicate ? "已新增收藏。提醒：找到名稱及地址相同的既有收藏，請確認是否重複。" : "收藏成功，已加入家庭共用清單！");
       loadData();
     }
   }
@@ -160,7 +160,7 @@ export default function Home() {
           <button className="primary" disabled={busy}>{busy ? "登入中…" : "登入 My Travel"}</button>
         </form>
         {message && <p className="notice">{message}</p>}
-        <p className="tiny muted">家庭共用帳號 · 僅限家人使用</p>
+        <p className="tiny muted">家庭成員各自登入 · 共用同一份家庭收藏</p>
       </section>
     </main>
   );
@@ -172,13 +172,13 @@ export default function Home() {
         <div className="user-tools"><span>{session.user.email}</span><button className="outline small" onClick={signOut}>登出</button></div>
       </header>
       <section className="hero">
-        <div><p className="eyebrow">YOUR PERSONAL TRAVEL LIBRARY</p><h1>把喜歡的地方，<br/>都收藏起來。</h1><p className="muted">每一次收藏，都是下一趟旅行的靈感。</p></div>
+        <div><p className="eyebrow">YOUR FAMILY TRAVEL LIBRARY</p><h1>把喜歡的地方，<br/>都收藏起來。</h1><p className="muted">你和家人各自登入，也能一起累積同一份旅行收藏。</p></div>
         <div className="hero-stats"><div><strong>{trips.length}</strong><span>旅行專案</span></div><div><strong>{items.length}</strong><span>收藏地點</span></div></div>
       </section>
 
       {message && <div className="notice global-notice">{message}<button onClick={() => setMessage("")}>×</button></div>}
 
-      <section className="section-heading"><div><p className="eyebrow">TRAVEL COLLECTIONS</p><h2>我的旅行</h2></div><button className="primary" onClick={() => setShowTripForm(!showTripForm)}>＋ 新增旅行</button></section>
+      <section className="section-heading"><div><p className="eyebrow">TRAVEL COLLECTIONS</p><h2>家庭旅行</h2></div><button className="primary" onClick={() => setShowTripForm(!showTripForm)}>＋ 新增旅行</button></section>
       {showTripForm && <form className="panel form-grid" onSubmit={createTrip}>
         <label>旅行名稱<input required value={tripTitle} onChange={e => setTripTitle(e.target.value)} placeholder="例如：沖繩五天四夜"/></label>
         <label>國家<input value={tripCountry} onChange={e => setTripCountry(e.target.value)} placeholder="日本"/></label>
