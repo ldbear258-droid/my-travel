@@ -21,13 +21,13 @@
 ### 正式部署步驟
 1. 建立 Supabase 專案：https://supabase.com/dashboard
 2. 在 Supabase 的 SQL Editor 執行 `supabase/schema.sql` 全部內容。
-3. 取得 Project URL 與 Publishable key（舊專案可使用 anon key）。
+3. 取得 Project URL 與 Publishable key。
 4. 登入 https://vercel.com，匯入此 GitHub repository，使用 Next.js 部署。
-5. 在 Vercel Environment Variables 加入 `NEXT_PUBLIC_SUPABASE_URL` 與 `NEXT_PUBLIC_SUPABASE_ANON_KEY`，再 Deploy。
+5. 在 Vercel Environment Variables 加入 `NEXT_PUBLIC_SUPABASE_URL` 與 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`，再 Deploy。
 6. 回 Supabase Authentication > URL Configuration，將 Vercel 網址設為 Site URL，並加入 Redirect URLs。
 
 ### 本機執行
 Node.js 20.9+。複製 `.env.example` 為 `.env.local` 並填入 Supabase URL/key，執行 `npm install`、`npm run dev`。
 
 ### 安全
-**不得**將 Supabase `service_role` 或 secret key 放在前端或任何 `NEXT_PUBLIC_` 變數。此版本採家庭共用帳號，家人使用同一組登入資料即可共用收藏；網站僅提供登入，不開放陌生人自行註冊。資料透過 RLS 限制在家庭共用帳號內。上線前應以兩個帳號驗證資料隔離。
+**不得**將 Supabase `service_role` 或 secret key 放在前端或任何 `NEXT_PUBLIC_` 變數。此版本採家庭共用帳號，家人使用同一組登入資料即可共用收藏；網站只顯示登入畫面。請在 Supabase Authentication 設定中關閉新使用者註冊，再由專案管理者建立唯一的家庭共用帳號。資料透過 RLS 限制在家庭共用帳號內。上線前應以兩個帳號驗證資料隔離。
