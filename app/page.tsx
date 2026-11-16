@@ -846,18 +846,181 @@ export default function Home() {
       return matchesScope && matchesTrip && haystack.includes(search.toLowerCase());
     })
     .sort((a, b) => {
-      if (selectedTrip !== "all") {
-        const dayA = a.itinerary_day ?? Number.MAX_SAFE_INTEGER;
-        const dayB = b.itinerary_day ?? Number.MAX_SAFE_INTEGER;
-        if (dayA !== dayB) return dayA - dayB;
+      const dayA = a.itinerary_day ?? Number.MAX_SAFE_INTEGER;
+      const dayB = b.itinerary_day ?? Number.MAX_SAFE_INTEGER;
+      if (dayA !== dayB) return dayA - dayB;
+      if (itinerarySortMode === "time") {
+        const timeA = a.reservation_time || "99:99";
+        const timeB = b.reservation_time || "99:99";
+        if (timeA !== timeB) return timeA.localeCompare(timeB);
       }
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    }), [items, selectedTrip, search]);
+      const orderA = a.itinerary_order || Number.MAX_SAFE_INTEGER;
+      const orderB = b.itinerary_order || Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    }), [items, selectedTrip, search, itinerarySortMode]);
 
   const filteredFoodDrink = useMemo(() => items.filter(item => {
     const haystack = [item.place_name, item.country, item.city, item.region, item.category, item.address, item.notes].join(" ").toLowerCase();
     return item.collection_scope === "food_drink" && haystack.includes(foodDrinkSearch.trim().toLowerCase());
   }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), [items, foodDrinkSearch]);
+
+  const itineraryGroups = useMemo(() => {
+    const tripIds = selectedTrip !== "all"
+      ? [selectedTrip]
+      : [
+          ...trips.filter(trip => filtered.some(item => item.trip_id === trip.id)).map(trip => trip.id),
+          ...(filtered.some(item => !item.trip_id) ? ["__none__"] : []),
+        ];
+    const groups: Array<{ key: string; tripId: string | null; tripTitle: string; day: number | null; items: Collection[] }> = [];
+
+    for (const tripKey of tripIds) {
+      const tripId = tripKey === "__none__" ? null : tripKey;
+      const trip = tripId ? trips.find(row => row.id === tripId) : null;
+      const tripItems = filtered.filter(item => item.trip_id === tripId);
+      const days = selectedTrip !== "all" && trip?.duration_days
+        ? Array.from({ length: trip.duration_days }, (_, index) => index + 1)
+        : [...new Set(tripItems.map(item => item.itinerary_day).filter((day): day is number => day !== null))].sort((a, b) => a - b);
+
+      for (const day of days) {
+        const groupItems = tripItems.filter(item => item.itinerary_day === day);
+        groupItems.sort((a, b) => {
+          if (itinerarySortMode === "time") {
+            const timeA = a.reservation_time || "99:99";
+            const timeB = b.reservation_time || "99:99";
+            if (timeA !== timeB) return timeA.localeCompare(timeB);
+          }
+          const orderA = a.itinerary_order || Number.MAX_SAFE_INTEGER;
+          const orderB = b.itinerary_order || Number.MAX_SAFE_INTEGER;
+          if (orderA !== orderB) return orderA - orderB;
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        });
+        groups.push({
+          key: (tripId || "unassigned") + "-day-" + day,
+          tripId,
+          tripTitle: trip?.title || "未指定旅行",
+          day,
+          items: groupItems,
+        });
+      }
+
+      const unscheduledItems = tripItems.filter(item => item.itinerary_day === null);
+      if (unscheduledItems.length > 0 || (selectedTrip !== "all" && days.length === 0)) {
+        unscheduledItems.sort((a, b) => {
+          const orderA = a.itinerary_order || Number.MAX_SAFE_INTEGER;
+          const orderB = b.itinerary_order || Number.MAX_SAFE_INTEGER;
+          return orderA - orderB || new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        });
+        groups.push({
+          key: (tripId || "unassigned") + "-unscheduled",
+          tripId,
+          tripTitle: trip?.title || "未指定旅行",
+          day: null,
+          items: unscheduledItems,
+        });
+      }
+    }
+    return groups;
+  }, [filtered, trips, selectedTrip, itinerarySortMode]);
+
+  const renderCollectionCard = (item: Collection, groupItems: Collection[] = []) => {
+    const currentIndex = groupItems.findIndex(row => row.id === item.id);
+    const canReorder = activePage === "collections" && itinerarySortMode === "custom" && groupItems.length > 1;
+    return (
+      <article
+        className={draggedItineraryId === item.id ? "place-card itinerary-place-card is-dragging" : "place-card itinerary-place-card"}
+        key={item.id}
+        onDragOver={event => { if (canReorder && draggedItineraryId) event.preventDefault(); }}
+        onDrop={event => {
+          if (!canReorder) return;
+          event.preventDefault();
+          const sourceId = draggedItineraryId || event.dataTransfer.getData("text/plain");
+          if (sourceId) reorderItineraryItems(groupItems, sourceId, item.id);
+          setDraggedItineraryId(null);
+        }}
+      >
+        {canReorder && <div className="itinerary-card-sort-tools">
+          <span
+            className="itinerary-drag-handle"
+            draggable={!itineraryOrderSaving}
+            onDragStart={event => {
+              setDraggedItineraryId(item.id);
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("text/plain", item.id);
+            }}
+            onDragEnd={() => setDraggedItineraryId(null)}
+            title="按住拖曳即可調整順序"
+          >⠿ 拖曳排序</span>
+          <div className="itinerary-move-buttons">
+            <button type="button" className="outline small" disabled={currentIndex <= 0 || itineraryOrderSaving} onClick={() => shiftItineraryItem(groupItems, item.id, -1)} aria-label="往上移動">↑</button>
+            <button type="button" className="outline small" disabled={currentIndex < 0 || currentIndex >= groupItems.length - 1 || itineraryOrderSaving} onClick={() => shiftItineraryItem(groupItems, item.id, 1)} aria-label="往下移動">↓</button>
+          </div>
+        </div>}
+        {(item as Collection & { image_url?: string | null }).image_url
+          ? <img className="place-image" src={(item as Collection & { image_url?: string | null }).image_url || ""} alt={item.place_name}/>
+          : item.google_place_id
+            ? <GoogleMapsPlacePhoto placeId={item.google_place_id} placeName={item.place_name}/>
+            : <div className="image-placeholder">✧</div>}
+        <div className="place-body">
+          <div className="place-card-heading">
+            <div className="place-card-heading-main">
+              <div className="place-meta"><span>{item.category}</span><span>{[item.country, item.city, item.region].filter(Boolean).join(" · ")}</span></div>
+              {item.reservation_time && <span className="reservation-time-chip">預約／預計 {item.reservation_time.slice(0, 5)}</span>}
+              <h3>{item.place_name}</h3>
+            </div>
+            <div className="card-visit-controls">
+              <label className="card-visited-toggle">
+                <input
+                  type="checkbox"
+                  checked={Boolean(item.visited)}
+                  disabled={inlineSavingIds.includes(item.id)}
+                  onChange={event => updateInlineVisit(item, event.target.checked, event.target.checked ? item.experience_rating : null)}
+                  aria-label={item.place_name + " 已去過"}
+                />
+                <span>已去過</span>
+              </label>
+              <select
+                className="card-rating-select"
+                value={item.experience_rating ? String(item.experience_rating) : ""}
+                disabled={!item.visited || inlineSavingIds.includes(item.id)}
+                onChange={event => updateInlineVisit(item, true, event.target.value ? Number(event.target.value) : null)}
+                aria-label={EXPERIENCE_RATINGS[item.category]?.question || "整體體驗評價"}
+                title={!item.visited ? "先勾選已去過，再留下評價" : EXPERIENCE_RATINGS[item.category]?.question}
+              >
+                <option value="">{item.visited ? "選擇評價" : "尚未去過"}</option>
+                {(EXPERIENCE_RATINGS[item.category]?.options || EXPERIENCE_RATINGS["其他"].options).map((option, index) => (
+                  <option key={option} value={String(4 - index)}>{option}</option>
+                ))}
+              </select>
+              {inlineSavingIds.includes(item.id) && <span className="card-save-state">儲存中…</span>}
+            </div>
+          </div>
+          {item.address && <p className="muted small-text">{item.address}</p>}
+          {item.notes && <p className="notes">{item.notes}</p>}
+          <div className="place-actions">
+            {item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer">查看原始貼文 ↗</a>}
+            {item.google_place_id && <a href={getGoogleMapsPlaceUrl(item.place_name, item.google_place_id)} target="_blank" rel="noreferrer">Google Maps ↗</a>}
+            <span className="action-group"><button className="edit-link" onClick={() => editCollection(item)}>編輯</button><button className="danger-link" onClick={() => deleteCollection(item.id)}>刪除</button></span>
+          </div>
+          {item.google_place_id && <div className="google-live-block">
+            <button type="button" className="outline small" disabled={googleDetailsBusyId === item.google_place_id} onClick={async () => {
+              const placeId = item.google_place_id as string;
+              if (expandedGooglePlaceId === placeId) { setExpandedGooglePlaceId(null); return; }
+              setExpandedGooglePlaceId(placeId);
+              if (!googleDetailsCache[placeId]) await fetchGooglePlaceDetails(placeId);
+            }}>{googleDetailsBusyId === item.google_place_id ? "查詢中…" : expandedGooglePlaceId === item.google_place_id ? "隱藏即時地點資料" : "顯示 Google Maps 即時地點資料"}</button>
+            {expandedGooglePlaceId === item.google_place_id && googleDetailsCache[item.google_place_id] && <div className="google-selected">
+              <strong>Google Maps 即時辨識</strong>
+              <span>{googleDetailsCache[item.google_place_id].displayName}</span>
+              <span className="muted small-text">{[normalizeGoogleLocation(googleDetailsCache[item.google_place_id]).country, normalizeGoogleLocation(googleDetailsCache[item.google_place_id]).city, normalizeGoogleLocation(googleDetailsCache[item.google_place_id]).municipality, normalizeGoogleLocation(googleDetailsCache[item.google_place_id]).region].filter(Boolean).join(" · ")}</span>
+              <span className="muted small-text">{googleDetailsCache[item.google_place_id].formattedAddress}</span>
+              <span className="google-attribution" translate="no">Google Maps</span>
+            </div>}
+          </div>}
+        </div>
+      </article>
+    );
+  };
 
   if (!session) return (
     <main className="auth-shell">
