@@ -14,7 +14,6 @@ export default function Home() {
   const [session, setSession] = useState<any>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [authMode, setAuthMode] = useState<"login" | "signup">("signup");
   const [trips, setTrips] = useState<Trip[]>([]);
   const [items, setItems] = useState<Collection[]>([]);
   const [selectedTrip, setSelectedTrip] = useState("all");
@@ -67,12 +66,9 @@ export default function Home() {
 
   async function authenticate(e: FormEvent) {
     e.preventDefault(); setBusy(true); setMessage("");
-    const result = authMode === "signup"
-      ? await supabase.auth.signUp({ email, password })
-      : await supabase.auth.signInWithPassword({ email, password });
+    const result = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
-    if (result.error) setMessage(result.error.message);
-    else if (authMode === "signup" && !result.data.session) setMessage("註冊成功！請到電子郵件收取驗證信，再回來登入。");
+    if (result.error) setMessage("登入失敗，請確認家庭共用帳號的電子郵件與密碼。");
     else setMessage("登入成功。");
   }
 
@@ -137,13 +133,10 @@ export default function Home() {
         <form onSubmit={authenticate} className="stack">
           <label>電子郵件<input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" /></label>
           <label>密碼<input type="password" required minLength={6} value={password} onChange={e => setPassword(e.target.value)} placeholder="至少 6 個字元" /></label>
-          <button className="primary" disabled={busy}>{busy ? "處理中…" : authMode === "signup" ? "建立帳號" : "登入"}</button>
+          <button className="primary" disabled={busy}>{busy ? "登入中…" : "登入 My Travel"}</button>
         </form>
-        <button className="text-button" onClick={() => setAuthMode(authMode === "signup" ? "login" : "signup")}>
-          {authMode === "signup" ? "已經有帳號？登入" : "還沒有帳號？立即註冊"}
-        </button>
         {message && <p className="notice">{message}</p>}
-        <p className="tiny muted">公開註冊 · 個人收藏預設僅自己可見</p>
+        <p className="tiny muted">家庭共用帳號 · 僅限家人使用</p>
       </section>
     </main>
   );
