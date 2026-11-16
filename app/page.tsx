@@ -190,7 +190,7 @@ export default function Home() {
     const { error } = await supabase.from("trips").insert({ user_id: session.user.id, title: tripTitle, country: tripCountry || null, city: tripCity || null });
     setBusy(false);
     if (error) setMessage(error.message);
-    else { setTripTitle(""); setTripCountry(""); setTripCity(""); setShowTripForm(false); setMessage("旅行專案已建立"); loadData(); }
+    else { setTripTitle(""); setTripCountry(""); setTripCity(""); setTripCountryCustom(false); setTripCityCustom(false); setShowTripForm(false); setMessage("旅行專案已建立"); loadData(); }
   }
 
   async function saveCollection(e: FormEvent) {
