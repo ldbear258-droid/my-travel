@@ -721,12 +721,18 @@ export default function Home() {
   }), [shoppingItems, selectedTrip, shoppingSearch]);
 
   const shoppingTotals = useMemo(() => {
-    const totals = new Map<string, { estimated: number; actual: number }>();
+    const totals = new Map<string, { estimated: number; actual: number; hasEstimated: boolean; hasActual: boolean }>();
     for (const item of filteredShoppingItems) {
-      const current = totals.get(item.currency) || { estimated: 0, actual: 0 };
+      const current = totals.get(item.currency) || { estimated: 0, actual: 0, hasEstimated: false, hasActual: false };
       const quantity = Number(item.quantity || 0);
-      current.estimated += quantity * Number(item.estimated_price || 0);
-      current.actual += quantity * Number(item.actual_price || 0);
+      if (item.estimated_price !== null) {
+        current.estimated += quantity * Number(item.estimated_price);
+        current.hasEstimated = true;
+      }
+      if (item.actual_price !== null) {
+        current.actual += quantity * Number(item.actual_price);
+        current.hasActual = true;
+      }
       totals.set(item.currency, current);
     }
     return Array.from(totals.entries()).map(([currency, values]) => ({ currency, ...values }));
@@ -965,8 +971,8 @@ export default function Home() {
             {shoppingTotals.length === 0 ? <span className="muted small-text">尚無金額紀錄</span> : shoppingTotals.map(total => (
               <div className="shopping-total-line" key={total.currency}>
                 <span>{total.currency}</span>
-                <span>預估 {formatShoppingMoney(total.estimated, total.currency)}</span>
-                <span>實際 {formatShoppingMoney(total.actual, total.currency)}</span>
+                <span>預估 {formatShoppingMoney(total.hasEstimated ? total.estimated : null, total.currency)}</span>
+                <span>實際 {formatShoppingMoney(total.hasActual ? total.actual : null, total.currency)}</span>
               </div>
             ))}
           </div>
@@ -1021,7 +1027,8 @@ export default function Home() {
                   </div>
                 </div>
                 <h3 className="shopping-item-name">{item.item_name}</h3>
-                <div className="shopping-item-meta"><span>{item.category}</span><span>{tripTitle || "未指定旅行"}</span><span>數量：{quantity}{item.unit || ""}</span></div>
+                <div className="shopping-item-meta"><span>{item.category}</span><span>{tripTitle || "未指定旅行"}</span><span>數量：{quantity}{item.unit || ""}</span>{item.store_name && <span>店家：{item.store_name}</span>}</div>
+                {item.product_url && <p className="shopping-product-link"><a href={item.product_url} target="_blank" rel="noreferrer">查看商品連結 ↗</a></p>}
                 <div className="shopping-price-grid">
                   <div><span>預估小計</span><strong>{formatShoppingMoney(estimatedSubtotal, item.currency)}</strong></div>
                   <div><span>實際小計</span><strong>{formatShoppingMoney(actualSubtotal, item.currency)}</strong></div>
