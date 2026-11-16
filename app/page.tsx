@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { getSupabase } from "@/lib/supabase";
 
-type Trip = { id: string; title: string; country: string | null; city: string | null; start_date: string | null; end_date: string | null; created_at: string };
+type Trip = { id: string; title: string; country: string | null; city: string | null; start_date: string | null; end_date: string | null; duration_days: number | null; duration_nights: number | null; created_at: string };
 type ShoppingItem = {
   id: string;
   user_id: string;
@@ -22,7 +22,7 @@ type ShoppingItem = {
   notes: string | null;
   created_at: string;
 };
-type Collection = { id: string; trip_id: string | null; place_name: string; country: string | null; city: string | null; region: string | null; category: string; address: string | null; source_url: string | null; notes: string | null; image_path: string | null; google_place_id: string | null; visited: boolean; experience_rating: number | null; created_at: string; image_url?: string | null };
+type Collection = { id: string; trip_id: string | null; place_name: string; country: string | null; city: string | null; region: string | null; category: string; address: string | null; source_url: string | null; notes: string | null; image_path: string | null; google_place_id: string | null; visited: boolean; experience_rating: number | null; collection_scope: "travel" | "food_drink"; itinerary_day: number | null; created_at: string; image_url?: string | null };
 type GoogleAddressComponent = { longText?: string; shortText?: string; types?: string[] };
 type GooglePlace = { id: string; displayName: string; formattedAddress: string; googleMapsUri: string; addressComponents?: GoogleAddressComponent[] };
 type GooglePhotoAuthor = { displayName?: string; uri?: string; photoUri?: string };
@@ -292,7 +292,8 @@ export default function Home() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [items, setItems] = useState<Collection[]>([]);
   const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([]);
-  const [activePage, setActivePage] = useState<"collections" | "shopping">("collections");
+  const [activePage, setActivePage] = useState<"collections" | "food_drink" | "shopping">("collections");
+  const [foodDrinkSearch, setFoodDrinkSearch] = useState("");
   const [shoppingSearch, setShoppingSearch] = useState("");
   const [shoppingFormOpen, setShoppingFormOpen] = useState(false);
   const [shoppingEditingId, setShoppingEditingId] = useState<string | null>(null);
@@ -316,6 +317,8 @@ export default function Home() {
   const [showTripForm, setShowTripForm] = useState(false);
   const [showSaveForm, setShowSaveForm] = useState(false);
   const [tripTitle, setTripTitle] = useState("");
+  const [tripDays, setTripDays] = useState("");
+  const [tripNights, setTripNights] = useState("");
   const [tripCountry, setTripCountry] = useState("");
   const [tripCity, setTripCity] = useState("");
   const [tripCountryCustom, setTripCountryCustom] = useState(false);
@@ -324,6 +327,8 @@ export default function Home() {
   const [placeCityCustom, setPlaceCityCustom] = useState(false);
   const [placeRegionCustom, setPlaceRegionCustom] = useState(false);
   const [placeName, setPlaceName] = useState("");
+  const [collectionScope, setCollectionScope] = useState<"travel" | "food_drink">("travel");
+  const [itineraryDay, setItineraryDay] = useState("");
   const [placeCountry, setPlaceCountry] = useState("");
   const [placeCity, setPlaceCity] = useState("");
   const [placeRegion, setPlaceRegion] = useState("");
@@ -456,9 +461,12 @@ export default function Home() {
   }
 
   function startNewCollection() {
+    const nextScope = activePage === "food_drink" ? "food_drink" : "travel";
+    setCollectionScope(nextScope);
+    setItineraryDay("");
     setEditingId(null); setExistingImagePath(null); setPlaceName(""); setPlaceCountry(""); setPlaceCity("");
     setPlaceRegion(""); setPlaceCountryCustom(false); setPlaceCityCustom(false); setPlaceRegionCustom(false);
-    setCategory("景點"); setVisited(false); setExperienceRating(""); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null);
+    setCategory(nextScope === "food_drink" ? "美食" : "景點"); setVisited(false); setExperienceRating(""); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null);
     setGooglePlaceId(null); setSelectedGooglePlace(null); setGoogleMunicipality(""); setShowSaveForm(true);
   }
 
@@ -477,11 +485,27 @@ export default function Home() {
 
   async function createTrip(e: FormEvent) {
     e.preventDefault(); if (!session) return;
+    const days = tripDays ? Number(tripDays) : null;
+    const nights = tripNights ? Number(tripNights) : null;
+    if ((days === null) !== (nights === null) || (days !== null && (!Number.isInteger(days) || days < 1 || days > 30 || !Number.isInteger(nights) || (nights as number) < 0 || (nights as number) > days))) {
+      setMessage("請確認旅行天數與夜數；夜數不可多於天數。");
+      return;
+    }
     setBusy(true);
-    const { error } = await supabase.from("trips").insert({ user_id: session.user.id, title: tripTitle, country: tripCountry || null, city: tripCity || null });
+    const { error } = await supabase.from("trips").insert({
+      user_id: session.user.id,
+      title: tripTitle,
+      country: tripCountry || null,
+      city: tripCity || null,
+      duration_days: days,
+      duration_nights: nights,
+    });
     setBusy(false);
     if (error) setMessage(error.message);
-    else { setTripTitle(""); setTripCountry(""); setTripCity(""); setTripCountryCustom(false); setTripCityCustom(false); setShowTripForm(false); setMessage(""); loadData(); }
+    else {
+      setTripTitle(""); setTripDays(""); setTripNights(""); setTripCountry(""); setTripCity("");
+      setTripCountryCustom(false); setTripCityCustom(false); setShowTripForm(false); setMessage(""); loadData();
+    }
   }
 
   async function saveCollection(e: FormEvent) {
@@ -497,8 +521,17 @@ export default function Home() {
       if (uploadError) { setBusy(false); setMessage("圖片上傳失敗：" + uploadError.message); return; }
       image_path = path;
     }
+    const targetTrip = collectionScope === "travel" && selectedTrip !== "all" ? trips.find(trip => trip.id === selectedTrip) : null;
+    const dayNumber = itineraryDay ? Number(itineraryDay) : null;
+    if (collectionScope === "travel" && dayNumber !== null && (!targetTrip?.duration_days || dayNumber < 1 || dayNumber > targetTrip.duration_days)) {
+      setBusy(false);
+      setMessage("行程日必須在這趟旅行的天數範圍內。");
+      return;
+    }
     const payload = {
-      trip_id: selectedTrip === "all" ? null : selectedTrip,
+      collection_scope: collectionScope,
+      trip_id: collectionScope === "travel" && selectedTrip !== "all" ? selectedTrip : null,
+      itinerary_day: collectionScope === "travel" ? dayNumber : null,
       place_name: placeName.trim(),
       // Google Maps content is displayed from a fresh lookup; only its exempt Place ID is persisted.
       country: googlePlaceId ? null : (placeCountry || null),
@@ -517,7 +550,7 @@ export default function Home() {
     setBusy(false);
     if (result.error) setMessage(result.error.message);
     else {
-      setPlaceName(""); setPlaceCountry(""); setPlaceCity(""); setPlaceRegion(""); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null); setGoogleMunicipality(""); setVisited(false); setExperienceRating("");
+      setPlaceName(""); setPlaceCountry(""); setPlaceCity(""); setPlaceRegion(""); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null); setGoogleMunicipality(""); setVisited(false); setExperienceRating(""); setItineraryDay("");
       setEditingId(null); setExistingImagePath(null); setGooglePlaceId(null); setSelectedGooglePlace(null); setShowSaveForm(false);
       setMessage(duplicate ? "已新增收藏，但找到名稱及地址相同的既有收藏，請確認是否重複。" : "");
       loadData();
@@ -530,6 +563,8 @@ export default function Home() {
       livePlace = googleDetailsCache[item.google_place_id] || await fetchGooglePlaceDetails(item.google_place_id);
     }
     setEditingId(item.id);
+    setCollectionScope(item.collection_scope || "travel");
+    setItineraryDay(item.itinerary_day ? String(item.itinerary_day) : "");
     setExistingImagePath(item.image_path);
     setGooglePlaceId(item.google_place_id || null);
     setSelectedGooglePlace(livePlace);
