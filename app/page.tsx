@@ -544,7 +544,7 @@ export default function Home() {
         </label>
         <label>分類<select value={category} onChange={e => setCategory(e.target.value)}>{categories.map(c => <option key={c}>{c}</option>)}</select></label>
         <div className="full-width visit-tracker">
-          <label className="visited-toggle"><input type="checkbox" checked={visited} onChange={e => setVisited(e.target.checked)} /> **已去過**</label>
+          <label className="visited-toggle"><input type="checkbox" checked={visited} onChange={e => setVisited(e.target.checked)} /> 已去過</label>
           <label className="experience-rating-label">{EXPERIENCE_RATINGS[category]?.question || "整體體驗如何？"}
             <select value={experienceRating} onChange={e => setExperienceRating(e.target.value)} disabled={!visited}>
               <option value="">請選擇評價</option>
