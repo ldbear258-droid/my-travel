@@ -623,6 +623,59 @@ export default function Home() {
     await loadData();
   }
 
+  async function persistItineraryOrder(orderedItems: Collection[]) {
+    if (orderedItems.length === 0) return;
+    setItineraryOrderSaving(true);
+    const savedItems = orderedItems.map((item, index) => ({ ...item, itinerary_order: index + 1 }));
+    setItems(previous => previous.map(item => savedItems.find(saved => saved.id === item.id) || item));
+
+    const results = await Promise.all(savedItems.map((item, index) =>
+      supabase.from("collections").update({ itinerary_order: index + 1 }).eq("id", item.id)
+    ));
+    const failed = results.find(result => result.error);
+    if (failed?.error) {
+      setMessage("行程排序儲存失敗：" + failed.error.message);
+      await loadData();
+    } else {
+      setMessage("");
+    }
+    setItineraryOrderSaving(false);
+  }
+
+  function reorderItineraryItems(groupItems: Collection[], sourceId: string, targetId: string) {
+    if (itinerarySortMode !== "custom" || sourceId === targetId || itineraryOrderSaving) return;
+    const ordered = [...groupItems].sort((a, b) =>
+      (a.itinerary_order || Number.MAX_SAFE_INTEGER) - (b.itinerary_order || Number.MAX_SAFE_INTEGER)
+      || new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    const fromIndex = ordered.findIndex(item => item.id === sourceId);
+    const toIndex = ordered.findIndex(item => item.id === targetId);
+    if (fromIndex < 0 || toIndex < 0) return;
+    const [moved] = ordered.splice(fromIndex, 1);
+    ordered.splice(toIndex, 0, moved);
+    void persistItineraryOrder(ordered);
+  }
+
+  function shiftItineraryItem(groupItems: Collection[], itemId: string, direction: -1 | 1) {
+    if (itinerarySortMode !== "custom" || itineraryOrderSaving) return;
+    const ordered = [...groupItems].sort((a, b) =>
+      (a.itinerary_order || Number.MAX_SAFE_INTEGER) - (b.itinerary_order || Number.MAX_SAFE_INTEGER)
+      || new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    const index = ordered.findIndex(item => item.id === itemId);
+    const target = ordered[index + direction];
+    if (index < 0 || !target) return;
+    reorderItineraryItems(ordered, itemId, target.id);
+  }
+
+  function addPlaceToItineraryDay(tripId: string | null, day: number | null) {
+    startNewCollection();
+    setCollectionScope("travel");
+    setSelectedTrip(tripId || "all");
+    setItineraryDay(day ? String(day) : "");
+    setReservationTime("");
+  }
+
   async function updateInlineVisit(item: Collection, nextVisited: boolean, nextRating: number | null) {
     if (inlineSavingIds.includes(item.id)) return;
     setInlineSavingIds(previous => [...previous, item.id]);
@@ -930,6 +983,10 @@ export default function Home() {
             </select>
             {!trips.find(t => t.id === selectedTrip)?.duration_days && <span className="location-hint">這個旅行尚未設定天數，請在新增旅行時設定行程天數與夜數。</span>}
           </label>}
+          <label>預約／預計時間
+            <input type="time" value={reservationTime} onChange={e => setReservationTime(e.target.value)} />
+            <span className="location-hint">例如：用餐預約、景點場次或租車取車時間；設定後可依時間排序。</span>
+          </label>
         </>}
         <label>國家
           <select value={placeCountryCustom ? "__custom__" : placeCountry} onChange={e => {
