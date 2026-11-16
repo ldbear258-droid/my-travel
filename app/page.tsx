@@ -773,11 +773,26 @@ export default function Home() {
     return Array.from(totals.entries()).map(([currency, values]) => ({ currency, ...values }));
   }, [filteredShoppingItems]);
 
-  const filtered = useMemo(() => items.filter(item => {
-    const matchesTrip = selectedTrip === "all" || item.trip_id === selectedTrip;
-    const haystack = [item.place_name, item.country, item.city, item.region, item.category, item.address].join(" ").toLowerCase();
-    return matchesTrip && haystack.includes(search.toLowerCase());
-  }), [items, selectedTrip, search]);
+  const filtered = useMemo(() => items
+    .filter(item => {
+      const matchesScope = item.collection_scope === "travel";
+      const matchesTrip = selectedTrip === "all" || item.trip_id === selectedTrip;
+      const haystack = [item.place_name, item.country, item.city, item.region, item.category, item.address].join(" ").toLowerCase();
+      return matchesScope && matchesTrip && haystack.includes(search.toLowerCase());
+    })
+    .sort((a, b) => {
+      if (selectedTrip !== "all") {
+        const dayA = a.itinerary_day ?? Number.MAX_SAFE_INTEGER;
+        const dayB = b.itinerary_day ?? Number.MAX_SAFE_INTEGER;
+        if (dayA !== dayB) return dayA - dayB;
+      }
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }), [items, selectedTrip, search]);
+
+  const filteredFoodDrink = useMemo(() => items.filter(item => {
+    const haystack = [item.place_name, item.country, item.city, item.region, item.category, item.address, item.notes].join(" ").toLowerCase();
+    return item.collection_scope === "food_drink" && haystack.includes(foodDrinkSearch.trim().toLowerCase());
+  }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), [items, foodDrinkSearch]);
 
   if (!session) return (
     <main className="auth-shell">
