@@ -185,6 +185,24 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  async function deleteTrip(trip: Trip) {
+    const linkedCount = items.filter(item => item.trip_id === trip.id).length;
+    const warning = linkedCount > 0
+      ? `此旅行有 ${linkedCount} 筆收藏。刪除旅行後，這些收藏仍會保留在「全部收藏」，不會一起刪除。\n\n確定要刪除「${trip.title}」嗎？`
+      : `確定要刪除旅行「${trip.title}」嗎？`;
+    if (!confirm(warning)) return;
+    setBusy(true);
+    const { error } = await supabase.from("trips").delete().eq("id", trip.id);
+    setBusy(false);
+    if (error) {
+      setMessage("刪除旅行失敗：" + error.message);
+      return;
+    }
+    if (selectedTrip === trip.id) setSelectedTrip("all");
+    setMessage(`旅行「${trip.title}」已刪除；原有收藏已保留在「全部收藏」。`);
+    await loadData();
+  }
+
   async function deleteCollection(id: string) {
     if (!confirm("確定刪除這筆收藏？")) return;
     const { error } = await supabase.from("collections").delete().eq("id", id);
@@ -239,10 +257,13 @@ export default function Home() {
       </form>}
       <div className="trip-grid">
         <button className={`trip-card all-card ${selectedTrip === "all" ? "selected" : ""}`} onClick={() => setSelectedTrip("all")}><span className="trip-icon">✧</span><strong>全部收藏</strong><span>{items.length} 個地點</span></button>
-        {trips.map(trip => <button key={trip.id} className={`trip-card ${selectedTrip === trip.id ? "selected" : ""}`} onClick={() => setSelectedTrip(trip.id)}>
-          <span className="trip-icon">⌁</span><strong>{trip.title}</strong><span>{[trip.country, trip.city].filter(Boolean).join(" · ") || "尚未設定地區"}</span>
-          <small>{items.filter(x => x.trip_id === trip.id).length} 個收藏</small>
-        </button>)}
+        {trips.map(trip => <div key={trip.id} className="trip-card-wrap">
+          <button className={`trip-card ${selectedTrip === trip.id ? "selected" : ""}`} onClick={() => setSelectedTrip(trip.id)}>
+            <span className="trip-icon">⌁</span><strong>{trip.title}</strong><span>{[trip.country, trip.city].filter(Boolean).join(" · ") || "尚未設定地區"}</span>
+            <small>{items.filter(x => x.trip_id === trip.id).length} 個收藏</small>
+          </button>
+          <button type="button" className="trip-delete-btn" disabled={busy} onClick={() => deleteTrip(trip)} aria-label={`刪除旅行 ${trip.title}`} title="刪除旅行">刪除</button>
+        </div>)}
       </div>
 
       <section className="section-heading collection-heading"><div><p className="eyebrow">SAVED PLACES</p><h2>收藏清單</h2></div><button className="primary" onClick={() => showSaveForm ? setShowSaveForm(false) : startNewCollection()}>{showSaveForm ? "收起表單" : "＋ 新增收藏"}</button></section>
