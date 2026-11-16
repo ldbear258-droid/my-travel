@@ -188,3 +188,49 @@ footer a{color:var(--muted);text-decoration:none}
   .reservation-time-part select{padding-left:9px;padding-right:7px}
   .reservation-time-clear{padding-left:10px;padding-right:10px}
 }
+
+
+/* Larger, easier-to-read typography for the travel itinerary view */
+.itinerary-sort-toolbar label{font-size:14px}
+.itinerary-sort-toolbar select{font-size:15px;min-height:44px}
+.itinerary-sort-hint{font-size:14px;line-height:1.65}
+.itinerary-day-kicker{font-size:13px;letter-spacing:2.2px}
+.itinerary-day-title-block h3{font-size:32px;line-height:1.25}
+.itinerary-trip-name{font-size:15px;line-height:1.45}
+.itinerary-day-header-actions{font-size:14px}
+.itinerary-day-header-actions .outline.small{font-size:13px;min-height:38px;padding:8px 12px}
+.itinerary-empty-day{font-size:14px;line-height:1.65}
+.itinerary-card-sort-tools{padding:10px 13px;min-height:48px}
+.itinerary-drag-handle{font-size:14px;gap:8px}
+.itinerary-move-buttons .outline.small{font-size:16px;min-width:36px;min-height:36px;padding:5px 10px}
+.itinerary-place-card .place-meta{font-size:13px;line-height:1.5;gap:8px}
+.itinerary-place-card .place-card-heading-main h3{font-size:22px;line-height:1.35;margin:10px 0 9px}
+.itinerary-place-card .reservation-time-chip{font-size:14px;line-height:1.4;padding:7px 11px}
+.itinerary-place-card .card-visited-toggle{font-size:14px;gap:9px;min-height:26px}
+.itinerary-place-card .card-visited-toggle input[type="checkbox"]{width:20px;height:20px}
+.itinerary-place-card .card-rating-select{font-size:14px;min-height:42px;padding:8px 10px}
+.itinerary-place-card .notes{font-size:15px;line-height:1.75}
+.itinerary-place-card .muted.small-text{font-size:13px;line-height:1.6}
+.itinerary-place-card .place-actions{font-size:14px;gap:12px}
+.itinerary-place-card .place-actions a,
+.itinerary-place-card .place-actions .edit-link,
+.itinerary-place-card .place-actions .danger-link{font-size:14px}
+.itinerary-place-card .google-live-block .outline.small{font-size:13px;min-height:38px;padding:8px 12px}
+.itinerary-place-card .google-selected{font-size:14px;line-height:1.6;gap:8px}
+.itinerary-place-card .google-selected .small-text{font-size:13px}
+.itinerary-place-card .google-selected .tiny{font-size:12px;line-height:1.55}
+@media(max-width:600px){
+  .itinerary-day-title-block h3{font-size:30px}
+  .itinerary-day-kicker{font-size:12px}
+  .itinerary-trip-name{font-size:14px}
+  .itinerary-day-header-actions{font-size:13px}
+  .itinerary-day-header-actions .outline.small{font-size:13px;min-height:40px;padding:9px 11px}
+  .itinerary-sort-hint{font-size:14px}
+  .itinerary-drag-handle{font-size:14px}
+  .itinerary-place-card .place-card-heading-main h3{font-size:21px}
+  .itinerary-place-card .notes{font-size:15px}
+  .itinerary-place-card .muted.small-text{font-size:13px}
+  .itinerary-place-card .place-actions a,
+  .itinerary-place-card .place-actions .edit-link,
+  .itinerary-place-card .place-actions .danger-link{font-size:14px}
+}
