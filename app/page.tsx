@@ -6,7 +6,56 @@ import { getSupabase } from "@/lib/supabase";
 
 type Trip = { id: string; title: string; country: string | null; city: string | null; start_date: string | null; end_date: string | null; created_at: string };
 type Collection = { id: string; trip_id: string | null; place_name: string; country: string | null; city: string | null; region: string | null; category: string; address: string | null; source_url: string | null; notes: string | null; image_path: string | null; google_place_id: string | null; created_at: string; image_url?: string | null };
-type GooglePlace = { id: string; displayName: string; formattedAddress: string; googleMapsUri: string };
+type GoogleAddressComponent = { longText?: string; shortText?: string; types?: string[] };
+type GooglePlace = { id: string; displayName: string; formattedAddress: string; googleMapsUri: string; addressComponents?: GoogleAddressComponent[] };
+type GoogleLocationGuess = { country: string; city: string; municipality: string; region: string };
+
+function getGoogleComponent(components: GoogleAddressComponent[] = [], ...types: string[]) {
+  const found = components.find(component => types.some(type => component.types?.includes(type)));
+  return found?.longText || found?.shortText || "";
+}
+
+function normalizeGoogleLocation(place: GooglePlace): GoogleLocationGuess {
+  const components = place.addressComponents || [];
+  const countryComponent = components.find(component => component.types?.includes("country"));
+  const countryCode = (countryComponent?.shortText || "").toUpperCase();
+  const countryLabels: Record<string, string> = {
+    TW: "台灣", JP: "日本", KR: "韓國", HK: "香港", MO: "澳門", TH: "泰國",
+    SG: "新加坡", MY: "馬來西亞", US: "美國", CA: "加拿大", GB: "英國",
+    FR: "法國", IT: "義大利", AU: "澳洲"
+  };
+  const rawCountry = countryComponent?.longText || countryComponent?.shortText || "";
+  const country = countryLabels[countryCode] || COUNTRY_OPTIONS.find(option => option === rawCountry) || rawCountry;
+  const rawAdmin1 = getGoogleComponent(components, "administrative_area_level_1");
+  const japanesePrefectures: Record<string, string> = {
+    "okinawa": "沖繩縣", "okinawa prefecture": "沖繩縣", "沖縄県": "沖繩縣",
+    "tokyo": "東京都", "tokyo metropolis": "東京都", "東京都": "東京都",
+    "osaka": "大阪府", "osaka prefecture": "大阪府", "大阪府": "大阪府",
+    "kyoto": "京都府", "kyoto prefecture": "京都府", "京都府": "京都府",
+    "hokkaido": "北海道", "北海道": "北海道",
+    "fukuoka": "福岡縣", "fukuoka prefecture": "福岡縣", "福岡県": "福岡縣",
+    "kanagawa": "神奈川縣", "愛知県": "愛知縣", "千葉県": "千葉縣"
+  };
+  const city = country === "日本"
+    ? (japanesePrefectures[rawAdmin1.toLowerCase()] || japanesePrefectures[rawAdmin1] || rawAdmin1)
+    : (rawAdmin1 || getGoogleComponent(components, "locality", "postal_town"));
+  const municipality = getGoogleComponent(
+    components,
+    "locality",
+    "administrative_area_level_2",
+    "postal_town",
+    "sublocality_level_1"
+  );
+  let region = "";
+  if (country === "日本" && city === "沖繩縣") {
+    const placeText = [municipality, rawAdmin1, ...components.map(component => component.longText || "")].join(" ").toLowerCase();
+    if (/石垣|宮古|竹富|與那國|久米島|座間味|渡嘉敷|ishigaki|miyako|kumejima|zamami|tokashiki|yaeyama/.test(placeText)) region = "離島";
+    else if (/本部|名護|國頭|今歸仁|大宜味|東村|宜野座|恩納|伊江|motobu|nago|kunigami|nakijin|ogimi|higashi|ginoza|onna|ie village/.test(placeText)) region = "北部";
+    else if (/沖繩市|うるま|宜野灣|北谷|嘉手納|讀谷|北中城|中城|金武|okinawa city|uruma|ginowan|chatan|kadena|yomitan|kitanakagusuku|nakagusuku|kin town/.test(placeText)) region = "中部";
+    else if (/那霸|浦添|豐見城|糸滿|南城|南風原|與那原|西原|八重瀬|naha|urasoe|tomigusuku|itoman|nanjo|haebaru|yonabaru|nishihara|yaese/.test(placeText)) region = "南部";
+  }
+  return { country, city, municipality, region };
+}
 
 const LOCATION_OPTIONS: Record<string, Record<string, string[]>> = {
   "台灣": {
@@ -102,6 +151,10 @@ export default function Home() {
   const [googleMessage, setGoogleMessage] = useState("");
   const [googlePlaceId, setGooglePlaceId] = useState<string | null>(null);
   const [selectedGooglePlace, setSelectedGooglePlace] = useState<GooglePlace | null>(null);
+  const [googleMunicipality, setGoogleMunicipality] = useState("");
+  const [googleDetailsCache, setGoogleDetailsCache] = useState<Record<string, GooglePlace>>({});
+  const [expandedGooglePlaceId, setExpandedGooglePlaceId] = useState<string | null>(null);
+  const [googleDetailsBusyId, setGoogleDetailsBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -166,21 +219,62 @@ export default function Home() {
     }
   }
 
+  async function fetchGooglePlaceDetails(placeId: string): Promise<GooglePlace | null> {
+    setGoogleDetailsBusyId(placeId);
+    try {
+      const { data: authData } = await supabase.auth.getSession();
+      const accessToken = authData.session?.access_token;
+      if (!accessToken) throw new Error("登入狀態已失效，請重新登入。");
+      const response = await fetch("/api/places/details", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + accessToken },
+        body: JSON.stringify({ placeId }),
+        cache: "no-store",
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "無法取得 Google Maps 地點資料。");
+      const place = result.place as GooglePlace;
+      setGoogleDetailsCache(previous => ({ ...previous, [placeId]: place }));
+      return place;
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "無法取得 Google Maps 地點資料。");
+      return null;
+    } finally {
+      setGoogleDetailsBusyId(null);
+    }
+  }
+
+  function applyGooglePlaceToForm(place: GooglePlace) {
+    const location = normalizeGoogleLocation(place);
+    const cityOptions = location.country ? Object.keys(LOCATION_OPTIONS[location.country] || {}) : [];
+    const regionOptions = LOCATION_OPTIONS[location.country]?.[location.city] || [];
+    setPlaceCountry(location.country);
+    setPlaceCountryCustom(Boolean(location.country && !COUNTRY_OPTIONS.includes(location.country)));
+    setPlaceCity(location.city);
+    setPlaceCityCustom(Boolean(location.city && !cityOptions.includes(location.city)));
+    setPlaceRegion(location.region);
+    setPlaceRegionCustom(Boolean(location.region && !regionOptions.includes(location.region)));
+    setGoogleMunicipality(location.municipality);
+    setAddress(place.formattedAddress || "");
+  }
+
   function startNewCollection() {
     setEditingId(null); setExistingImagePath(null); setPlaceName(""); setPlaceCountry(""); setPlaceCity("");
     setPlaceRegion(""); setPlaceCountryCustom(false); setPlaceCityCustom(false); setPlaceRegionCustom(false);
     setCategory("景點"); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null);
-    setGooglePlaceId(null); setSelectedGooglePlace(null); setShowSaveForm(true);
+    setGooglePlaceId(null); setSelectedGooglePlace(null); setGoogleMunicipality(""); setShowSaveForm(true);
   }
 
   function chooseGooglePlace(place: GooglePlace) {
     startNewCollection();
     setGooglePlaceId(place.id);
     setSelectedGooglePlace(place);
-    // Keep the user's own search phrase as the saved label; Google Places content is not copied into the database.
+    setGoogleDetailsCache(previous => ({ ...previous, [place.id]: place }));
+    // The search phrase remains the user's own collection title. Google place data is displayed live only.
     setPlaceName(googleQuery.trim());
+    applyGooglePlaceToForm(place);
     setGoogleMessage("");
-    setMessage("已選取 Google Maps 地點。請確認下方收藏名稱及分類，再儲存。");
+    setMessage("已選取 Google Maps 地點，國家、縣市、可辨識區域及地址已自動帶入。");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -208,8 +302,14 @@ export default function Home() {
     }
     const payload = {
       trip_id: selectedTrip === "all" ? null : selectedTrip,
-      place_name: placeName.trim(), country: placeCountry || null, city: placeCity || null,
-      region: placeRegion || null, category, address: address || null, source_url: sourceUrl || null,
+      place_name: placeName.trim(),
+      // Google Maps content is displayed from a fresh lookup; only its exempt Place ID is persisted.
+      country: googlePlaceId ? null : (placeCountry || null),
+      city: googlePlaceId ? null : (placeCity || null),
+      region: googlePlaceId ? null : (placeRegion || null),
+      category,
+      address: googlePlaceId ? null : (address || null),
+      source_url: sourceUrl || null,
       notes: notes || null, image_path, google_place_id: googlePlaceId
     };
     const result = editingId
@@ -218,27 +318,36 @@ export default function Home() {
     setBusy(false);
     if (result.error) setMessage(result.error.message);
     else {
-      setPlaceName(""); setPlaceCountry(""); setPlaceCity(""); setPlaceRegion(""); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null);
+      setPlaceName(""); setPlaceCountry(""); setPlaceCity(""); setPlaceRegion(""); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null); setGoogleMunicipality("");
       setEditingId(null); setExistingImagePath(null); setGooglePlaceId(null); setSelectedGooglePlace(null); setShowSaveForm(false);
       setMessage(editingId ? "收藏已更新，家庭成員都能看到。" : duplicate ? "已新增收藏。提醒：找到名稱及地址相同的既有收藏，請確認是否重複。" : "收藏成功，已加入家庭共用清單！");
       loadData();
     }
   }
 
-  function editCollection(item: Collection) {
+  async function editCollection(item: Collection) {
+    let livePlace: GooglePlace | null = null;
+    if (item.google_place_id) {
+      livePlace = googleDetailsCache[item.google_place_id] || await fetchGooglePlaceDetails(item.google_place_id);
+    }
     setEditingId(item.id);
     setExistingImagePath(item.image_path);
     setGooglePlaceId(item.google_place_id || null);
-    setSelectedGooglePlace(null);
+    setSelectedGooglePlace(livePlace);
     setPlaceName(item.place_name);
-    setPlaceCountry(item.country || "");
-    setPlaceCity(item.city || "");
-    setPlaceRegion(item.region || "");
-    setPlaceCountryCustom(Boolean(item.country && !COUNTRY_OPTIONS.includes(item.country)));
-    setPlaceCityCustom(Boolean(item.city && !Object.keys(LOCATION_OPTIONS[item.country || ""] || {}).includes(item.city)));
-    setPlaceRegionCustom(Boolean(item.region && !(LOCATION_OPTIONS[item.country || ""]?.[item.city || ""] || []).includes(item.region)));
+    if (livePlace) {
+      applyGooglePlaceToForm(livePlace);
+    } else {
+      setGoogleMunicipality("");
+      setPlaceCountry(item.country || "");
+      setPlaceCity(item.city || "");
+      setPlaceRegion(item.region || "");
+      setPlaceCountryCustom(Boolean(item.country && !COUNTRY_OPTIONS.includes(item.country)));
+      setPlaceCityCustom(Boolean(item.city && !Object.keys(LOCATION_OPTIONS[item.country || ""] || {}).includes(item.city)));
+      setPlaceRegionCustom(Boolean(item.region && !(LOCATION_OPTIONS[item.country || ""]?.[item.city || ""] || []).includes(item.region)));
+      setAddress(item.address || "");
+    }
     setCategory(item.category);
-    setAddress(item.address || "");
     setSourceUrl(item.source_url || "");
     setNotes(item.notes || "");
     setImageFile(null);
@@ -370,8 +479,8 @@ export default function Home() {
         </div>}
       </section>
       {showSaveForm && <form className="panel form-grid" onSubmit={saveCollection}>
-        <div className="full-width"><h3>{editingId ? "編輯旅行收藏" : "新增一筆旅行收藏"}</h3><p className="muted small-text">收藏名稱、分類、備註及地址由你自行確認與填寫。Google Maps 搜尋結果只供即時參考；My Travel 僅保存 Google Place ID，並提供地圖連結。</p></div>
-        {selectedGooglePlace && <div className="full-width google-selected"><strong>已選取 Google Maps 地點</strong><span>{selectedGooglePlace.displayName}</span><span className="muted small-text">{selectedGooglePlace.formattedAddress}</span><a href={selectedGooglePlace.googleMapsUri} target="_blank" rel="noreferrer">Google Maps ↗</a><p className="tiny muted">下方收藏名稱會使用你輸入的搜尋文字；可自行修改成自己的收藏名稱。</p></div>}
+        <div className="full-width"><h3>{editingId ? "編輯旅行收藏" : "新增一筆旅行收藏"}</h3><p className="muted small-text">選取 Google Maps 地點後，國家、縣市、可辨識的區域及地址會自動帶入供即時確認。為符合 Google Maps 資料使用規範，資料庫只保存 Google Place ID；收藏卡片可按需重新查詢最新地點資料。自行建立的收藏仍可保存你手動輸入的地區與地址。</p></div>
+        {selectedGooglePlace && <div className="full-width google-selected"><strong>已選取 Google Maps 地點</strong><span>{selectedGooglePlace.displayName}</span><span className="muted small-text">{selectedGooglePlace.formattedAddress}</span>{googleMunicipality && <span className="muted small-text">市町村／行政區：{googleMunicipality}</span>}<a href={selectedGooglePlace.googleMapsUri} target="_blank" rel="noreferrer">Google Maps ↗</a><p className="tiny muted">國家、縣市、可辨識區域及地址已自動帶入。這些 Google Maps 資料僅供即時確認，不會寫入資料庫；My Travel 只保存 Place ID。</p></div>}
         {googlePlaceId && !selectedGooglePlace && <div className="full-width google-selected"><span>這筆收藏已連結 Google Maps 地點。</span></div>}
         <label>地點／店家名稱 *<input required value={placeName} onChange={e => setPlaceName(e.target.value)} placeholder="例如：美麗海水族館"/></label>
         <label>所屬旅行<select value={selectedTrip} onChange={e => setSelectedTrip(e.target.value)}><option value="all">暫不指定／全部收藏</option>{trips.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select></label>
@@ -412,7 +521,7 @@ export default function Home() {
           {!placeCountryCustom && !placeCityCustom && placeCity && placeRegionOptions.length === 0 && <span className="location-hint">此城市目前沒有預設區域清單，可自行輸入行政區或地區。</span>}
         </label>
         <label>分類<select value={category} onChange={e => setCategory(e.target.value)}>{categories.map(c => <option key={c}>{c}</option>)}</select></label>
-        <label className="full-width">地址<input value={address} onChange={e => setAddress(e.target.value)} placeholder="可稍後補上"/></label>
+        <label className="full-width">地址（選取 Google Maps 地點時自動帶入）<input value={address} onChange={e => setAddress(e.target.value)} placeholder="可稍後補上"/></label>
         <label className="full-width">原始貼文網址<input type="url" value={sourceUrl} onChange={e => setSourceUrl(e.target.value)} placeholder="https://..."/></label>
         <label className="full-width">備註<textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="想吃什麼、注意事項、推薦原因…"/></label>
         <label className="full-width">貼文圖片／截圖<input type="file" accept="image/*" onChange={e => setImageFile(e.target.files?.[0] || null)}/></label>
@@ -426,6 +535,21 @@ export default function Home() {
           <div className="place-body"><div className="place-meta"><span>{item.category}</span><span>{[item.country, item.city, item.region].filter(Boolean).join(" · ")}</span></div>
             <h3>{item.place_name}</h3>{item.address && <p className="muted small-text">{item.address}</p>}{item.notes && <p className="notes">{item.notes}</p>}
             <div className="place-actions">{item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer">查看原始貼文 ↗</a>}{item.google_place_id && <a href={"https://www.google.com/maps/search/?api=1&query_place_id=" + encodeURIComponent(item.google_place_id)} target="_blank" rel="noreferrer">Google Maps ↗</a>}<span className="action-group"><button className="edit-link" onClick={() => editCollection(item)}>編輯</button><button className="danger-link" onClick={() => deleteCollection(item.id)}>刪除</button></span></div>
+            {item.google_place_id && <div className="google-live-block">
+              <button type="button" className="outline small" disabled={googleDetailsBusyId === item.google_place_id} onClick={async () => {
+                const placeId = item.google_place_id as string;
+                if (expandedGooglePlaceId === placeId) { setExpandedGooglePlaceId(null); return; }
+                setExpandedGooglePlaceId(placeId);
+                if (!googleDetailsCache[placeId]) await fetchGooglePlaceDetails(placeId);
+              }}>{googleDetailsBusyId === item.google_place_id ? "查詢中…" : expandedGooglePlaceId === item.google_place_id ? "隱藏即時地點資料" : "顯示 Google Maps 即時地點資料"}</button>
+              {expandedGooglePlaceId === item.google_place_id && googleDetailsCache[item.google_place_id] && <div className="google-selected">
+                <strong>Google Maps 即時辨識</strong>
+                <span>{googleDetailsCache[item.google_place_id].displayName}</span>
+                <span className="muted small-text">{[normalizeGoogleLocation(googleDetailsCache[item.google_place_id]).country, normalizeGoogleLocation(googleDetailsCache[item.google_place_id]).city, normalizeGoogleLocation(googleDetailsCache[item.google_place_id]).municipality, normalizeGoogleLocation(googleDetailsCache[item.google_place_id]).region].filter(Boolean).join(" · ")}</span>
+                <span className="muted small-text">{googleDetailsCache[item.google_place_id].formattedAddress}</span>
+                <span className="google-attribution" translate="no">Google Maps</span>
+              </div>}
+            </div>}
           </div>
         </article>)}</div>}
       <footer>MY TRAVEL · YOUR PLACES, YOUR JOURNEYS · <a href="/terms">使用條款</a> · <a href="/privacy">隱私權政策</a></footer>
