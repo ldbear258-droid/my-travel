@@ -173,3 +173,18 @@ footer a{color:var(--muted);text-decoration:none}
   .itinerary-day-header-actions .outline.small{font-size:10px;padding:6px 8px}
   .itinerary-groups{gap:25px}
 }
+
+
+.reservation-time-field{display:grid;align-content:start;gap:7px;min-width:0}
+.reservation-time-label{font-size:11px;font-weight:700;color:var(--ink)}
+.reservation-time-control{display:flex;align-items:end;gap:9px;min-width:0}
+.reservation-time-part{display:grid;gap:4px;flex:1;min-width:0}
+.reservation-time-part select{width:100%;min-height:40px;font-variant-numeric:tabular-nums}
+.reservation-time-colon{font-size:20px;font-weight:800;color:var(--ink);padding-bottom:8px}
+.reservation-time-clear{min-height:40px;white-space:nowrap}
+@media(max-width:600px){
+  .reservation-time-control{gap:7px}
+  .reservation-time-part{min-width:0}
+  .reservation-time-part select{padding-left:9px;padding-right:7px}
+  .reservation-time-clear{padding-left:10px;padding-right:10px}
+}
