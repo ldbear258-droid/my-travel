@@ -3,11 +3,14 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
+type GoogleAddressComponent = { longText?: string; shortText?: string; types?: string[] };
+
 type GooglePlaceApiResult = {
   id?: string;
   displayName?: { text?: string };
   formattedAddress?: string;
   googleMapsUri?: string;
+  addressComponents?: GoogleAddressComponent[];
 };
 
 export async function POST(request: Request) {
@@ -45,7 +48,7 @@ export async function POST(request: Request) {
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": googleApiKey,
-        "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.googleMapsUri",
+        "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.googleMapsUri,places.addressComponents",
       },
       body: JSON.stringify({ textQuery: query, languageCode: "zh-TW", pageSize: 6 }),
       cache: "no-store",
@@ -61,6 +64,7 @@ export async function POST(request: Request) {
       displayName: place.displayName?.text || "未提供店家名稱",
       formattedAddress: place.formattedAddress || "",
       googleMapsUri: place.googleMapsUri || "https://www.google.com/maps/search/?api=1&query_place_id=" + encodeURIComponent(place.id as string),
+      addressComponents: place.addressComponents || [],
     }));
     return NextResponse.json({ places });
   } catch {
