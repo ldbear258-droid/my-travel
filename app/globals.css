@@ -41,3 +41,20 @@ footer a{color:var(--muted);text-decoration:none}
 .visited-chip,.rating-chip{display:inline-flex;align-items:center;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:700}
 .visited-chip{background:#eaf2e9;color:#315d4c}
 .rating-chip{background:#f5f0e5;color:#76613b}
+
+
+.place-card-heading{display:grid;grid-template-columns:minmax(0,1fr) minmax(132px,1fr);align-items:start;gap:12px}
+.place-card-heading-main{min-width:0}
+.place-card-heading-main .place-meta{justify-content:flex-start;gap:7px;flex-wrap:wrap}
+.place-card-heading-main h3{margin:9px 0 7px;overflow-wrap:anywhere}
+.card-visit-controls{display:grid;align-content:start;gap:7px;min-width:0}
+.card-visited-toggle{display:flex;align-items:center;gap:7px;min-height:21px;font-size:12px;font-weight:700;color:var(--ink);cursor:pointer}
+.card-visited-toggle input[type="checkbox"]{width:17px;height:17px;padding:0;margin:0;accent-color:var(--green);flex:0 0 auto}
+.card-rating-select{width:100%;min-width:0;min-height:34px;padding:7px 8px;border-radius:8px;font-size:11px;background:#fff}
+.card-rating-select:disabled{background:#f3f5f2;color:#96a19a;opacity:1;cursor:not-allowed}
+.card-save-state{font-size:10px;color:var(--muted);line-height:1.2}
+@media(max-width:520px){
+  .place-card-heading{grid-template-columns:minmax(0,1fr) minmax(132px,44%);gap:9px}
+  .card-visited-toggle{font-size:12px}
+  .card-rating-select{font-size:11px}
+}
