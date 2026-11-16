@@ -813,6 +813,23 @@ export default function Home() {
       <section className="section-heading"><div><p className="eyebrow">TRAVEL COLLECTIONS</p><h2>家庭旅行</h2></div><button className="primary" onClick={() => setShowTripForm(!showTripForm)}>＋ 新增旅行</button></section>
       {showTripForm && <form className="panel form-grid" onSubmit={createTrip}>
         <label>旅行名稱<input required value={tripTitle} onChange={e => setTripTitle(e.target.value)} placeholder="例如：沖繩五天四夜"/></label>
+        <label>旅行天數
+          <select value={tripDays} onChange={event => {
+            const value = event.target.value;
+            setTripDays(value);
+            if (!value) setTripNights("");
+            else if (!tripNights || Number(tripNights) > Number(value)) setTripNights(String(Math.max(0, Number(value) - 1)));
+          }}>
+            <option value="">不設定</option>
+            {Array.from({ length: 30 }, (_, index) => index + 1).map(day => <option key={day} value={String(day)}>{day} 天</option>)}
+          </select>
+        </label>
+        <label>旅行夜數
+          <select value={tripNights} disabled={!tripDays} onChange={event => setTripNights(event.target.value)}>
+            <option value="">請選擇夜數</option>
+            {Array.from({ length: Number(tripDays || 0) + 1 }, (_, index) => index).map(night => <option key={night} value={String(night)}>{night} 夜</option>)}
+          </select>
+        </label>
         <label>國家
           <select value={tripCountryCustom ? "__custom__" : tripCountry} onChange={e => {
             if (e.target.value === "__custom__") { setTripCountry(""); setTripCountryCustom(true); setTripCity(""); setTripCityCustom(false); }
@@ -842,21 +859,23 @@ export default function Home() {
         {trips.map(trip => <div key={trip.id} className="trip-card-wrap">
           <button className={`trip-card ${selectedTrip === trip.id ? "selected" : ""}`} onClick={() => setSelectedTrip(trip.id)}>
             <span className="trip-icon">⌁</span><strong>{trip.title}</strong><span>{[trip.country, trip.city].filter(Boolean).join(" · ") || "尚未設定地區"}</span>
-            <small>{items.filter(x => x.trip_id === trip.id).length} 個收藏</small>
+            {trip.duration_days && trip.duration_nights !== null && <small className="trip-duration">{trip.duration_days} 天 {trip.duration_nights} 夜</small>}
+            <small>{items.filter(x => x.trip_id === trip.id && x.collection_scope === "travel").length} 個收藏</small>
           </button>
           <button type="button" className="trip-delete-btn" disabled={busy} onClick={() => deleteTrip(trip)} aria-label={`刪除旅行 ${trip.title}`} title="刪除旅行">刪除</button>
         </div>)}
       </div>
 
       <nav className="app-tabs" aria-label="My Travel 功能">
-        <button type="button" className={activePage === "collections" ? "app-tab active" : "app-tab"} onClick={() => setActivePage("collections")}>收藏地點</button>
+        <button type="button" className={activePage === "collections" ? "app-tab active" : "app-tab"} onClick={() => setActivePage("collections")}>旅行行程</button>
+        <button type="button" className={activePage === "food_drink" ? "app-tab active" : "app-tab"} onClick={() => setActivePage("food_drink")}>吃喝清單 <span>{items.filter(item => item.collection_scope === "food_drink").length}</span></button>
         <button type="button" className={activePage === "shopping" ? "app-tab active" : "app-tab"} onClick={() => setActivePage("shopping")}>購物清單 <span>{shoppingItems.length}</span></button>
       </nav>
 
-      {activePage === "collections" && <>
-      <section className="section-heading collection-heading"><div><p className="eyebrow">SAVED PLACES</p><h2>收藏清單</h2></div><button className="primary" onClick={() => showSaveForm ? setShowSaveForm(false) : startNewCollection()}>{showSaveForm ? "收起表單" : "＋ 新增收藏"}</button></section>
+      {(activePage === "collections" || activePage === "food_drink") && <>
+      <section className="section-heading collection-heading"><div><p className="eyebrow">{activePage === "food_drink" ? "FOOD & DRINK" : "TRAVEL ITINERARY"}</p><h2>{activePage === "food_drink" ? "吃喝清單" : "旅行行程收藏"}</h2></div><button className="primary" onClick={() => showSaveForm ? setShowSaveForm(false) : startNewCollection()}>{showSaveForm ? "收起表單" : activePage === "food_drink" ? "＋ 新增吃喝地點" : "＋ 新增行程地點"}</button></section>
       <section className="google-search-panel">
-        <div><p className="eyebrow">FIND A PLACE</p><h3>從 Google Maps 搜尋店家</h3><p className="muted small-text">輸入店名、景點或城市，例如「A&W 牧港店」或「沖繩水族館」。</p></div>
+        <div><p className="eyebrow">FIND A PLACE</p><h3>{activePage === "food_drink" ? "從 Google Maps 搜尋餐廳／咖啡店" : "從 Google Maps 搜尋店家／景點"}</h3><p className="muted small-text">{activePage === "food_drink" ? "把平常想吃、想喝、想再訪的店家獨立收藏，不必指定旅行。" : "輸入店名、景點或城市，例如「A&W 牧港店」或「沖繩水族館」。"}</p></div>
         <form className="google-search-form" onSubmit={searchGoogleMaps}>
           <input value={googleQuery} onChange={e => setGoogleQuery(e.target.value)} placeholder="輸入店家名稱或景點…" aria-label="搜尋 Google Maps 店家" />
           <button className="primary" disabled={googleBusy || googleQuery.trim().length < 2}>{googleBusy ? "搜尋中…" : "搜尋 Google Maps"}</button>
@@ -871,11 +890,20 @@ export default function Home() {
         </div>}
       </section>
       {showSaveForm && <form id="save-collection-form" className="panel form-grid" onSubmit={saveCollection}>
-        <div className="full-width"><h3>{editingId ? "編輯旅行收藏" : "新增一筆旅行收藏"}</h3><p className="muted small-text">選取 Google Maps 地點後，國家、縣市、可辨識的區域及地址會自動帶入供即時確認。為符合 Google Maps 資料使用規範，資料庫只保存 Google Place ID；收藏卡片可按需重新查詢最新地點資料。自行建立的收藏仍可保存你手動輸入的地區與地址。</p></div>
+        <div className="full-width"><h3>{editingId ? (collectionScope === "food_drink" ? "編輯吃喝收藏" : "編輯旅行行程收藏") : (collectionScope === "food_drink" ? "新增吃喝收藏" : "新增一筆旅行行程收藏")}</h3><p className="muted small-text">選取 Google Maps 地點後，國家、縣市、可辨識的區域及地址會自動帶入供即時確認。Google Maps 地點資料僅供即時確認，資料庫只保存 Google Place ID。</p></div>
         {selectedGooglePlace && <div className="full-width google-selected"><strong>已選取 Google Maps 地點</strong><span className="google-source-label">Google Maps 原始店名（即時資料）</span><span className="google-source-name">{selectedGooglePlace.displayName}</span><span className="muted small-text">{selectedGooglePlace.formattedAddress}</span>{googleMunicipality && <span className="muted small-text">市町村／行政區：{googleMunicipality}</span>}<a href={selectedGooglePlace.googleMapsUri} target="_blank" rel="noreferrer">Google Maps ↗</a><p className="tiny muted">上方名稱與地址來自 Google Maps，即時顯示供你核對；資料庫只保存 Google Place ID。</p></div>}
         {googlePlaceId && !selectedGooglePlace && <div className="full-width google-selected"><span>這筆收藏已連結 Google Maps 地點。</span></div>}
         <label>我的收藏名稱 *<input required value={placeName} onChange={e => setPlaceName(e.target.value)} placeholder="輸入你想在收藏清單顯示的名稱"/>{selectedGooglePlace && <span className="location-hint">上方是 Google Maps 原始店名；這裡填寫你自己的收藏名稱，可自由修改。</span>}</label>
-        <label>所屬旅行<select value={selectedTrip} onChange={e => setSelectedTrip(e.target.value)}><option value="all">暫不指定／全部收藏</option>{trips.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select></label>
+        {collectionScope === "travel" && <>
+          <label>所屬旅行<select value={selectedTrip} onChange={e => { setSelectedTrip(e.target.value); setItineraryDay(""); }}><option value="all">暫不指定／全部收藏</option>{trips.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select></label>
+          {selectedTrip !== "all" && <label>安排在第幾天
+            <select value={itineraryDay} onChange={e => setItineraryDay(e.target.value)} disabled={!trips.find(t => t.id === selectedTrip)?.duration_days}>
+              <option value="">尚未安排日期</option>
+              {Array.from({ length: trips.find(t => t.id === selectedTrip)?.duration_days || 0 }, (_, index) => index + 1).map(day => <option key={day} value={String(day)}>第 {day} 天</option>)}
+            </select>
+            {!trips.find(t => t.id === selectedTrip)?.duration_days && <span className="location-hint">這個旅行尚未設定天數，請在新增旅行時設定行程天數與夜數。</span>}
+          </label>}
+        </>}
         <label>國家
           <select value={placeCountryCustom ? "__custom__" : placeCountry} onChange={e => {
             if (e.target.value === "__custom__") { setPlaceCountry(""); setPlaceCountryCustom(true); }
@@ -930,9 +958,9 @@ export default function Home() {
         <div className="form-actions"><button className="primary" disabled={busy}>{busy ? "儲存中…" : editingId ? "儲存修改" : "儲存收藏"}</button><button type="button" className="outline" onClick={() => { setShowSaveForm(false); setEditingId(null); setExistingImagePath(null); setImageFile(null); setPlaceCountryCustom(false); setPlaceCityCustom(false); setPlaceRegionCustom(false); }}>取消</button></div>
       </form>}
 
-      <div className="toolbar"><input className="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="⌕ 搜尋店家、城市、分類…"/><span className="muted small-text">共 {filtered.length} 筆</span></div>
-      {filtered.length === 0 ? <div className="empty"><div>⌖</div><h3>還沒有收藏地點</h3><p className="muted">把看到的好地方先收藏起來，慢慢建立你的旅行資料庫。</p><button className="primary" onClick={() => setShowSaveForm(true)}>新增第一筆收藏</button></div> :
-        <div className="collection-grid">{filtered.map(item => <article className="place-card" key={item.id}>
+      <div className="toolbar"><input className="search" value={activePage === "food_drink" ? foodDrinkSearch : search} onChange={e => activePage === "food_drink" ? setFoodDrinkSearch(e.target.value) : setSearch(e.target.value)} placeholder={activePage === "food_drink" ? "⌕ 搜尋餐廳、咖啡店、類型…" : "⌕ 搜尋店家、城市、分類…"}/><span className="muted small-text">共 {activePage === "food_drink" ? filteredFoodDrink.length : filtered.length} 筆</span></div>
+      {(activePage === "food_drink" ? filteredFoodDrink : filtered).length === 0 ? <div className="empty"><div>{activePage === "food_drink" ? "☕" : "⌖"}</div><h3>{activePage === "food_drink" ? "還沒有吃喝收藏" : "還沒有旅行行程收藏"}</h3><p className="muted">{activePage === "food_drink" ? "把平常想吃的餐廳、咖啡店與飲料店收藏在這裡。" : "把旅行中想去的地方收藏起來，再安排到每天行程。"}</p><button className="primary" onClick={() => setShowSaveForm(true)}>{activePage === "food_drink" ? "新增第一筆吃喝收藏" : "新增第一筆行程收藏"}</button></div> :
+        <div className="collection-grid">{(activePage === "food_drink" ? filteredFoodDrink : filtered).map(item => <article className="place-card" key={item.id}>
           {(item as Collection & { image_url?: string | null }).image_url
             ? <img className="place-image" src={(item as Collection & { image_url?: string | null }).image_url || ""} alt={item.place_name}/>
             : item.google_place_id
@@ -941,7 +969,7 @@ export default function Home() {
           <div className="place-body">
             <div className="place-card-heading">
               <div className="place-card-heading-main">
-                <div className="place-meta"><span>{item.category}</span><span>{[item.country, item.city, item.region].filter(Boolean).join(" · ")}</span></div>
+                <div className="place-meta"><span>{item.category}</span><span>{[item.country, item.city, item.region].filter(Boolean).join(" · ")}</span>{item.collection_scope === "travel" && item.itinerary_day && <span className="itinerary-day-chip">第 {item.itinerary_day} 天</span>}</div>
                 <h3>{item.place_name}</h3>
               </div>
               <div className="card-visit-controls">
