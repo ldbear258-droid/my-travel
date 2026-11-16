@@ -136,6 +136,7 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [trips, setTrips] = useState<Trip[]>([]);
   const [items, setItems] = useState<Collection[]>([]);
+  const [inlineSavingIds, setInlineSavingIds] = useState<string[]>([]);
   const [selectedTrip, setSelectedTrip] = useState("all");
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
@@ -397,6 +398,29 @@ export default function Home() {
     await loadData();
   }
 
+  async function updateInlineVisit(item: Collection, nextVisited: boolean, nextRating: number | null) {
+    if (inlineSavingIds.includes(item.id)) return;
+    setInlineSavingIds(previous => [...previous, item.id]);
+    setItems(previous => previous.map(existing => existing.id === item.id
+      ? { ...existing, visited: nextVisited, experience_rating: nextRating }
+      : existing
+    ));
+
+    const { error } = await supabase
+      .from("collections")
+      .update({ visited: nextVisited, experience_rating: nextVisited ? nextRating : null })
+      .eq("id", item.id);
+
+    if (error) {
+      setItems(previous => previous.map(existing => existing.id === item.id
+        ? { ...existing, visited: item.visited, experience_rating: item.experience_rating }
+        : existing
+      ));
+      setMessage("更新已去過／體驗評價失敗：" + error.message);
+    }
+    setInlineSavingIds(previous => previous.filter(id => id !== item.id));
+  }
+
   async function deleteCollection(id: string) {
     if (!confirm("確定刪除這筆收藏？")) return;
     const { error } = await supabase.from("collections").delete().eq("id", id);
@@ -564,12 +588,40 @@ export default function Home() {
       {filtered.length === 0 ? <div className="empty"><div>⌖</div><h3>還沒有收藏地點</h3><p className="muted">把看到的好地方先收藏起來，慢慢建立你的旅行資料庫。</p><button className="primary" onClick={() => setShowSaveForm(true)}>新增第一筆收藏</button></div> :
         <div className="collection-grid">{filtered.map(item => <article className="place-card" key={item.id}>
           {(item as Collection & { image_url?: string | null }).image_url ? <img className="place-image" src={(item as Collection & { image_url?: string | null }).image_url || ""} alt={item.place_name}/> : <div className="image-placeholder">✧</div>}
-          <div className="place-body"><div className="place-meta"><span>{item.category}</span><span>{[item.country, item.city, item.region].filter(Boolean).join(" · ")}</span></div>
-            <h3>{item.place_name}</h3>{item.address && <p className="muted small-text">{item.address}</p>}{item.notes && <p className="notes">{item.notes}</p>}
-            {(item.visited || item.experience_rating) && <div className="visit-summary">
-              {item.visited && <span className="visited-chip">✓ 已去過</span>}
-              {item.experience_rating && <span className="rating-chip">{EXPERIENCE_RATINGS[item.category]?.options[4 - item.experience_rating] || "已評價"}</span>}
-            </div>}
+          <div className="place-body">
+            <div className="place-card-heading">
+              <div className="place-card-heading-main">
+                <div className="place-meta"><span>{item.category}</span><span>{[item.country, item.city, item.region].filter(Boolean).join(" · ")}</span></div>
+                <h3>{item.place_name}</h3>
+              </div>
+              <div className="card-visit-controls">
+                <label className="card-visited-toggle">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(item.visited)}
+                    disabled={inlineSavingIds.includes(item.id)}
+                    onChange={event => updateInlineVisit(item, event.target.checked, event.target.checked ? item.experience_rating : null)}
+                    aria-label={item.place_name + " 已去過"}
+                  />
+                  <span>已去過</span>
+                </label>
+                <select
+                  className="card-rating-select"
+                  value={item.experience_rating ? String(item.experience_rating) : ""}
+                  disabled={!item.visited || inlineSavingIds.includes(item.id)}
+                  onChange={event => updateInlineVisit(item, true, event.target.value ? Number(event.target.value) : null)}
+                  aria-label={EXPERIENCE_RATINGS[item.category]?.question || "整體體驗評價"}
+                  title={!item.visited ? "先勾選已去過，再留下評價" : EXPERIENCE_RATINGS[item.category]?.question}
+                >
+                  <option value="">{item.visited ? "選擇評價" : "尚未去過"}</option>
+                  {(EXPERIENCE_RATINGS[item.category]?.options || EXPERIENCE_RATINGS["其他"].options).map((option, index) => (
+                    <option key={option} value={String(4 - index)}>{option}</option>
+                  ))}
+                </select>
+                {inlineSavingIds.includes(item.id) && <span className="card-save-state">儲存中…</span>}
+              </div>
+            </div>
+            {item.address && <p className="muted small-text">{item.address}</p>}{item.notes && <p className="notes">{item.notes}</p>}
             <div className="place-actions">{item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer">查看原始貼文 ↗</a>}{item.google_place_id && <a href={getGoogleMapsPlaceUrl(item.place_name, item.google_place_id)} target="_blank" rel="noreferrer">Google Maps ↗</a>}<span className="action-group"><button className="edit-link" onClick={() => editCollection(item)}>編輯</button><button className="danger-link" onClick={() => deleteCollection(item.id)}>刪除</button></span></div>
             {item.google_place_id && <div className="google-live-block">
               <button type="button" className="outline small" disabled={googleDetailsBusyId === item.google_place_id} onClick={async () => {
