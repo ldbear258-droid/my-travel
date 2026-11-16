@@ -22,3 +22,9 @@ footer a{color:var(--muted);text-decoration:none}
 .legal-shell p{font-size:14px;color:#56665e}
 .legal-shell a{color:var(--green)}
 @media(max-width:520px){.google-search-panel{padding:15px}.google-search-form{flex-direction:column}.google-search-form button{width:100%}.google-result-card{align-items:flex-start}.google-result-card>.outline{flex-shrink:0}}
+
+.trip-card-wrap{position:relative;min-width:0}
+.trip-card-wrap .trip-card{width:100%;padding-right:62px}
+.trip-delete-btn{position:absolute;top:12px;right:12px;z-index:2;border:1px solid var(--line);border-radius:8px;background:#fff;padding:5px 8px;color:#a36c62;font-size:11px;font-weight:600}
+.trip-delete-btn:hover{background:#fbf3f1;border-color:#e8d1cb}
+.trip-delete-btn:disabled{opacity:.5;cursor:wait}
