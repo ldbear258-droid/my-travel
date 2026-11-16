@@ -8,6 +8,60 @@ type Trip = { id: string; title: string; country: string | null; city: string | 
 type Collection = { id: string; trip_id: string | null; place_name: string; country: string | null; city: string | null; region: string | null; category: string; address: string | null; source_url: string | null; notes: string | null; image_path: string | null; google_place_id: string | null; created_at: string; image_url?: string | null };
 type GooglePlace = { id: string; displayName: string; formattedAddress: string; googleMapsUri: string };
 
+const LOCATION_OPTIONS: Record<string, Record<string, string[]>> = {
+  "台灣": {
+    "台北市": ["中正區", "大同區", "中山區", "松山區", "大安區", "萬華區", "信義區", "士林區", "北投區", "內湖區", "南港區", "文山區"],
+    "新北市": ["板橋區", "中和區", "永和區", "新莊區", "三重區", "土城區", "樹林區", "淡水區", "汐止區", "林口區", "三峽區", "鶯歌區", "蘆洲區", "五股區", "泰山區", "八里區", "三芝區", "金山區", "萬里區", "深坑區", "石碇區", "坪林區", "石門區", "平溪區", "雙溪區", "貢寮區", "烏來區", "瑞芳區"],
+    "基隆市": ["仁愛區", "信義區", "中正區", "中山區", "安樂區", "暖暖區", "七堵區"],
+    "桃園市": ["桃園區", "中壢區", "八德區", "平鎮區", "龜山區", "蘆竹區", "大園區", "觀音區", "新屋區", "楊梅區", "龍潭區", "大溪區", "復興區"],
+    "新竹市": ["東區", "北區", "香山區"],
+    "新竹縣": ["竹北市", "竹東鎮", "湖口鄉", "新豐鄉", "新埔鎮", "關西鎮", "芎林鄉", "寶山鄉", "北埔鄉", "峨眉鄉", "橫山鄉", "尖石鄉", "五峰鄉"],
+    "苗栗縣": ["苗栗市", "頭份市", "竹南鎮", "後龍鎮", "通霄鎮", "苑裡鎮", "卓蘭鎮", "造橋鄉", "西湖鄉", "頭屋鄉", "公館鄉", "銅鑼鄉", "三義鄉", "大湖鄉", "獅潭鄉", "三灣鄉", "南庄鄉", "泰安鄉"],
+    "台中市": ["中區", "東區", "南區", "西區", "北區", "西屯區", "南屯區", "北屯區", "豐原區", "大里區", "太平區", "清水區", "沙鹿區", "大甲區", "霧峰區", "烏日區", "后里區", "神岡區", "潭子區", "大雅區", "新社區", "石岡區", "外埔區", "大安區", "梧棲區", "龍井區", "大肚區", "東勢區", "和平區"],
+    "彰化縣": ["彰化市", "員林市", "鹿港鎮", "和美鎮", "溪湖鎮", "田中鎮", "北斗鎮", "二林鎮", "花壇鄉", "芬園鄉", "秀水鄉", "福興鄉", "埔心鄉", "埔鹽鄉", "大村鄉", "永靖鄉", "社頭鄉", "田尾鄉", "埤頭鄉", "芳苑鄉", "大城鄉", "竹塘鄉", "溪州鄉", "線西鄉", "伸港鄉", "二水鄉"],
+    "南投縣": ["南投市", "埔里鎮", "草屯鎮", "竹山鎮", "集集鎮", "名間鄉", "鹿谷鄉", "中寮鄉", "魚池鄉", "國姓鄉", "水里鄉", "信義鄉", "仁愛鄉"],
+    "雲林縣": ["斗六市", "斗南鎮", "虎尾鎮", "西螺鎮", "土庫鎮", "北港鎮", "古坑鄉", "大埤鄉", "莿桐鄉", "林內鄉", "二崙鄉", "崙背鄉", "麥寮鄉", "東勢鄉", "褒忠鄉", "台西鄉", "元長鄉", "四湖鄉", "口湖鄉", "水林鄉"],
+    "嘉義市": ["東區", "西區"],
+    "嘉義縣": ["太保市", "朴子市", "布袋鎮", "大林鎮", "民雄鄉", "溪口鄉", "新港鄉", "六腳鄉", "東石鄉", "義竹鄉", "鹿草鄉", "水上鄉", "中埔鄉", "竹崎鄉", "梅山鄉", "番路鄉", "大埔鄉", "阿里山鄉"],
+    "台南市": ["中西區", "東區", "南區", "北區", "安平區", "安南區", "永康區", "歸仁區", "新化區", "左鎮區", "玉井區", "楠西區", "南化區", "仁德區", "關廟區", "龍崎區", "官田區", "麻豆區", "佳里區", "西港區", "七股區", "將軍區", "學甲區", "北門區", "新營區", "後壁區", "白河區", "東山區", "六甲區", "下營區", "柳營區", "鹽水區", "善化區", "大內區", "山上區", "新市區", "安定區"],
+    "高雄市": ["新興區", "前金區", "苓雅區", "鹽埕區", "鼓山區", "旗津區", "前鎮區", "三民區", "楠梓區", "小港區", "左營區", "仁武區", "大社區", "岡山區", "路竹區", "阿蓮區", "田寮區", "燕巢區", "橋頭區", "梓官區", "彌陀區", "永安區", "湖內區", "鳳山區", "大寮區", "林園區", "鳥松區", "大樹區", "旗山區", "美濃區", "六龜區", "內門區", "杉林區", "甲仙區", "桃源區", "那瑪夏區", "茂林區", "茄萣區"],
+    "屏東縣": ["屏東市", "潮州鎮", "東港鎮", "恆春鎮", "萬丹鄉", "長治鄉", "麟洛鄉", "九如鄉", "里港鄉", "鹽埔鄉", "高樹鄉", "萬巒鄉", "內埔鄉", "竹田鄉", "新埤鄉", "枋寮鄉", "新園鄉", "崁頂鄉", "林邊鄉", "南州鄉", "佳冬鄉", "琉球鄉", "車城鄉", "滿州鄉", "枋山鄉", "三地門鄉", "霧台鄉", "瑪家鄉", "泰武鄉", "來義鄉", "春日鄉", "獅子鄉", "牡丹鄉"],
+    "宜蘭縣": ["宜蘭市", "羅東鎮", "蘇澳鎮", "頭城鎮", "礁溪鄉", "壯圍鄉", "員山鄉", "冬山鄉", "五結鄉", "三星鄉", "大同鄉", "南澳鄉"],
+    "花蓮縣": ["花蓮市", "鳳林鎮", "玉里鎮", "新城鄉", "吉安鄉", "壽豐鄉", "光復鄉", "豐濱鄉", "瑞穗鄉", "富里鄉", "秀林鄉", "萬榮鄉", "卓溪鄉"],
+    "台東縣": ["台東市", "成功鎮", "關山鎮", "卑南鄉", "鹿野鄉", "池上鄉", "東河鄉", "長濱鄉", "太麻里鄉", "大武鄉", "綠島鄉", "海端鄉", "延平鄉", "金峰鄉", "達仁鄉", "蘭嶼鄉"],
+    "澎湖縣": ["馬公市", "湖西鄉", "白沙鄉", "西嶼鄉", "望安鄉", "七美鄉"],
+    "金門縣": ["金城鎮", "金湖鎮", "金沙鎮", "金寧鄉", "烈嶼鄉", "烏坵鄉"],
+    "連江縣": ["南竿鄉", "北竿鄉", "莒光鄉", "東引鄉"]
+  },
+  "日本": {
+    "沖繩縣": ["北部", "中部", "南部", "離島"],
+    "東京都": ["新宿區", "澀谷區", "千代田區", "中央區", "港區", "台東區", "墨田區", "江東區", "品川區", "目黑區", "大田區", "世田谷區", "中野區", "杉並區", "豐島區", "北區", "荒川區", "板橋區", "練馬區", "足立區", "葛飾區", "江戶川區"],
+    "大阪府": ["大阪市", "堺市", "吹田市", "豐中市", "枚方市", "岸和田市", "泉佐野市"],
+    "京都府": ["京都市", "宇治市", "舞鶴市"],
+    "北海道": ["札幌市", "小樽市", "函館市", "旭川市", "富良野市", "登別市"],
+    "福岡縣": ["福岡市", "北九州市", "太宰府市", "久留米市"],
+    "神奈川縣": ["橫濱市", "鎌倉市", "箱根町", "川崎市"],
+    "愛知縣": ["名古屋市", "豐田市", "犬山市"],
+    "千葉縣": ["千葉市", "浦安市", "成田市"]
+  },
+  "韓國": {
+    "首爾特別市": ["江南區", "明洞", "弘大", "梨泰院", "東大門", "鐘路區", "聖水洞", "蠶室"],
+    "釜山廣域市": ["海雲台區", "南浦洞", "西面", "廣安里", "甘川洞"],
+    "濟州特別自治道": ["濟州市", "西歸浦市", "涯月邑", "城山邑"]
+  },
+  "香港": { "香港島": ["中環", "銅鑼灣", "灣仔", "上環"], "九龍": ["尖沙咀", "旺角", "深水埗", "九龍城"], "新界": ["沙田", "荃灣", "屯門", "元朗", "西貢"] },
+  "澳門": { "澳門半島": ["議事亭前地", "新馬路", "大三巴"], "氹仔": ["官也街", "路氹城"], "路環": ["路環市區"] },
+  "泰國": { "曼谷": ["暹羅", "素坤逸", "是隆", "考山路"], "清邁": ["古城區", "寧曼路", "湄林"], "普吉": ["芭東", "卡塔", "卡倫"] },
+  "新加坡": { "新加坡": ["濱海灣", "烏節路", "牛車水", "聖淘沙", "小印度"] },
+  "馬來西亞": { "吉隆坡": ["市中心", "武吉免登", "KLCC"], "檳城": ["喬治市", "峇都丁宜"], "馬六甲": ["雞場街", "市中心"], "沙巴": ["亞庇", "仙本那"], "柔佛": ["新山"] },
+  "美國": { "紐約": ["曼哈頓", "布魯克林", "皇后區"], "洛杉磯": ["好萊塢", "比佛利山", "聖塔莫尼卡"], "舊金山": ["漁人碼頭", "唐人街", "金門公園"], "拉斯維加斯": ["大道區", "市中心"], "夏威夷": ["檀香山", "威基基", "茂宜島"], "西雅圖": ["市中心", "派克市場"] },
+  "加拿大": { "溫哥華": ["市中心", "列治文", "本拿比"], "多倫多": ["市中心", "北約克", "士嘉堡"], "蒙特婁": ["舊城區", "市中心"] },
+  "英國": { "倫敦": ["西敏市", "蘇活區", "肯辛頓", "金絲雀碼頭"], "曼徹斯特": ["市中心", "北區"], "愛丁堡": ["舊城區", "新城區"] },
+  "法國": { "巴黎": ["羅浮宮區", "艾菲爾鐵塔區", "蒙馬特", "拉丁區"], "尼斯": ["舊城區", "海濱區"], "里昂": ["市中心", "舊城區"] },
+  "義大利": { "羅馬": ["歷史中心", "梵蒂岡周邊"], "米蘭": ["大教堂區", "布雷拉區"], "威尼斯": ["聖馬可區", "里亞托區"], "佛羅倫斯": ["歷史中心"] },
+  "澳洲": { "雪梨": ["市中心", "達令港", "邦迪海灘"], "墨爾本": ["市中心", "聖基爾達"], "布里斯本": ["市中心", "南岸"], "珀斯": ["市中心", "弗里曼特爾"] }
+};
+const COUNTRY_OPTIONS = Object.keys(LOCATION_OPTIONS);
 const categories = ["景點", "美食", "購物", "住宿", "交通", "其他"];
 const supabase = getSupabase();
 
@@ -26,6 +80,11 @@ export default function Home() {
   const [tripTitle, setTripTitle] = useState("");
   const [tripCountry, setTripCountry] = useState("");
   const [tripCity, setTripCity] = useState("");
+  const [tripCountryCustom, setTripCountryCustom] = useState(false);
+  const [tripCityCustom, setTripCityCustom] = useState(false);
+  const [placeCountryCustom, setPlaceCountryCustom] = useState(false);
+  const [placeCityCustom, setPlaceCityCustom] = useState(false);
+  const [placeRegionCustom, setPlaceRegionCustom] = useState(false);
   const [placeName, setPlaceName] = useState("");
   const [placeCountry, setPlaceCountry] = useState("");
   const [placeCity, setPlaceCity] = useState("");
@@ -109,7 +168,8 @@ export default function Home() {
 
   function startNewCollection() {
     setEditingId(null); setExistingImagePath(null); setPlaceName(""); setPlaceCountry(""); setPlaceCity("");
-    setPlaceRegion(""); setCategory("景點"); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null);
+    setPlaceRegion(""); setPlaceCountryCustom(false); setPlaceCityCustom(false); setPlaceRegionCustom(false);
+    setCategory("景點"); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null);
     setGooglePlaceId(null); setSelectedGooglePlace(null); setShowSaveForm(true);
   }
 
@@ -174,6 +234,9 @@ export default function Home() {
     setPlaceCountry(item.country || "");
     setPlaceCity(item.city || "");
     setPlaceRegion(item.region || "");
+    setPlaceCountryCustom(Boolean(item.country && !COUNTRY_OPTIONS.includes(item.country)));
+    setPlaceCityCustom(Boolean(item.city && !Object.keys(LOCATION_OPTIONS[item.country || ""] || {}).includes(item.city)));
+    setPlaceRegionCustom(Boolean(item.region && !(LOCATION_OPTIONS[item.country || ""]?.[item.city || ""] || []).includes(item.region)));
     setCategory(item.category);
     setAddress(item.address || "");
     setSourceUrl(item.source_url || "");
@@ -210,6 +273,10 @@ export default function Home() {
   }
 
   async function signOut() { await supabase.auth.signOut(); setTrips([]); setItems([]); }
+
+  const tripCityOptions = LOCATION_OPTIONS[tripCountry] ? Object.keys(LOCATION_OPTIONS[tripCountry]) : [];
+  const placeCityOptions = LOCATION_OPTIONS[placeCountry] ? Object.keys(LOCATION_OPTIONS[placeCountry]) : [];
+  const placeRegionOptions = LOCATION_OPTIONS[placeCountry]?.[placeCity] || [];
 
   const filtered = useMemo(() => items.filter(item => {
     const matchesTrip = selectedTrip === "all" || item.trip_id === selectedTrip;
@@ -251,8 +318,28 @@ export default function Home() {
       <section className="section-heading"><div><p className="eyebrow">TRAVEL COLLECTIONS</p><h2>家庭旅行</h2></div><button className="primary" onClick={() => setShowTripForm(!showTripForm)}>＋ 新增旅行</button></section>
       {showTripForm && <form className="panel form-grid" onSubmit={createTrip}>
         <label>旅行名稱<input required value={tripTitle} onChange={e => setTripTitle(e.target.value)} placeholder="例如：沖繩五天四夜"/></label>
-        <label>國家<input value={tripCountry} onChange={e => setTripCountry(e.target.value)} placeholder="日本"/></label>
-        <label>城市／地區<input value={tripCity} onChange={e => setTripCity(e.target.value)} placeholder="沖繩"/></label>
+        <label>國家
+          <select value={tripCountryCustom ? "__custom__" : tripCountry} onChange={e => {
+            if (e.target.value === "__custom__") { setTripCountry(""); setTripCountryCustom(true); setTripCity(""); setTripCityCustom(false); }
+            else { setTripCountry(e.target.value); setTripCountryCustom(false); setTripCity(""); setTripCityCustom(false); }
+          }}>
+            <option value="">請選擇國家</option>
+            {COUNTRY_OPTIONS.map(country => <option key={country} value={country}>{country}</option>)}
+            <option value="__custom__">其他／自行輸入</option>
+          </select>
+          {tripCountryCustom && <input value={tripCountry} onChange={e => setTripCountry(e.target.value)} placeholder="請輸入國家名稱" />}
+        </label>
+        <label>城市／縣市
+          {!tripCountryCustom && tripCityOptions.length > 0 && !tripCityCustom ? <select value={tripCity} onChange={e => {
+            if (e.target.value === "__custom__") { setTripCity(""); setTripCityCustom(true); }
+            else setTripCity(e.target.value);
+          }}>
+            <option value="">請先選擇國家，再選城市</option>
+            {tripCity && !tripCityOptions.includes(tripCity) && <option value={tripCity}>{tripCity}（既有資料）</option>}
+            {tripCityOptions.map(city => <option key={city} value={city}>{city}</option>)}
+            <option value="__custom__">其他／自行輸入</option>
+          </select> : <input value={tripCity} onChange={e => setTripCity(e.target.value)} placeholder="請輸入城市／縣市" />}
+        </label>
         <div className="form-actions"><button className="primary" disabled={busy}>儲存專案</button><button type="button" className="outline" onClick={() => setShowTripForm(false)}>取消</button></div>
       </form>}
       <div className="trip-grid">
@@ -288,15 +375,48 @@ export default function Home() {
         {googlePlaceId && !selectedGooglePlace && <div className="full-width google-selected"><span>這筆收藏已連結 Google Maps 地點。</span></div>}
         <label>地點／店家名稱 *<input required value={placeName} onChange={e => setPlaceName(e.target.value)} placeholder="例如：美麗海水族館"/></label>
         <label>所屬旅行<select value={selectedTrip} onChange={e => setSelectedTrip(e.target.value)}><option value="all">暫不指定／全部收藏</option>{trips.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select></label>
-        <label>國家<input value={placeCountry} onChange={e => setPlaceCountry(e.target.value)} placeholder="日本"/></label>
-        <label>城市<input value={placeCity} onChange={e => setPlaceCity(e.target.value)} placeholder="沖繩"/></label>
-        <label>區域<input value={placeRegion} onChange={e => setPlaceRegion(e.target.value)} placeholder="北部／中部／南部"/></label>
+        <label>國家
+          <select value={placeCountryCustom ? "__custom__" : placeCountry} onChange={e => {
+            if (e.target.value === "__custom__") { setPlaceCountry(""); setPlaceCountryCustom(true); }
+            else { setPlaceCountry(e.target.value); setPlaceCountryCustom(false); }
+            setPlaceCity(""); setPlaceRegion(""); setPlaceCityCustom(false); setPlaceRegionCustom(false);
+          }}>
+            <option value="">請選擇國家</option>
+            {placeCountry && !COUNTRY_OPTIONS.includes(placeCountry) && <option value={placeCountry}>{placeCountry}（既有資料）</option>}
+            {COUNTRY_OPTIONS.map(country => <option key={country} value={country}>{country}</option>)}
+            <option value="__custom__">其他／自行輸入</option>
+          </select>
+          {placeCountryCustom && <input value={placeCountry} onChange={e => setPlaceCountry(e.target.value)} placeholder="請輸入國家名稱" />}
+        </label>
+        <label>城市／縣市
+          {!placeCountryCustom && placeCityOptions.length > 0 && !placeCityCustom ? <select value={placeCity} onChange={e => {
+            if (e.target.value === "__custom__") { setPlaceCity(""); setPlaceCityCustom(true); }
+            else { setPlaceCity(e.target.value); setPlaceRegion(""); setPlaceRegionCustom(false); }
+          }}>
+            <option value="">請先選擇國家，再選城市／縣市</option>
+            {placeCity && !placeCityOptions.includes(placeCity) && <option value={placeCity}>{placeCity}（既有資料）</option>}
+            {placeCityOptions.map(city => <option key={city} value={city}>{city}</option>)}
+            <option value="__custom__">其他／自行輸入</option>
+          </select> : <input value={placeCity} onChange={e => { setPlaceCity(e.target.value); setPlaceRegion(""); }} placeholder="請輸入城市／縣市" />}
+        </label>
+        <label>區域
+          {!placeCountryCustom && !placeCityCustom && placeRegionOptions.length > 0 && !placeRegionCustom ? <select value={placeRegion} onChange={e => {
+            if (e.target.value === "__custom__") { setPlaceRegion(""); setPlaceRegionCustom(true); }
+            else setPlaceRegion(e.target.value);
+          }}>
+            <option value="">請選擇區域</option>
+            {placeRegion && !placeRegionOptions.includes(placeRegion) && <option value={placeRegion}>{placeRegion}（既有資料）</option>}
+            {placeRegionOptions.map(region => <option key={region} value={region}>{region}</option>)}
+            <option value="__custom__">其他／自行輸入</option>
+          </select> : <input value={placeRegion} onChange={e => setPlaceRegion(e.target.value)} placeholder="請輸入區域／行政區" />}
+          {!placeCountryCustom && !placeCityCustom && placeCity && placeRegionOptions.length === 0 && <span className="location-hint">此城市目前沒有預設區域清單，可自行輸入行政區或地區。</span>}
+        </label>
         <label>分類<select value={category} onChange={e => setCategory(e.target.value)}>{categories.map(c => <option key={c}>{c}</option>)}</select></label>
         <label className="full-width">地址<input value={address} onChange={e => setAddress(e.target.value)} placeholder="可稍後補上"/></label>
         <label className="full-width">原始貼文網址<input type="url" value={sourceUrl} onChange={e => setSourceUrl(e.target.value)} placeholder="https://..."/></label>
         <label className="full-width">備註<textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="想吃什麼、注意事項、推薦原因…"/></label>
         <label className="full-width">貼文圖片／截圖<input type="file" accept="image/*" onChange={e => setImageFile(e.target.files?.[0] || null)}/></label>
-        <div className="form-actions"><button className="primary" disabled={busy}>{busy ? "儲存中…" : editingId ? "儲存修改" : "儲存收藏"}</button><button type="button" className="outline" onClick={() => { setShowSaveForm(false); setEditingId(null); setExistingImagePath(null); setImageFile(null); }}>取消</button></div>
+        <div className="form-actions"><button className="primary" disabled={busy}>{busy ? "儲存中…" : editingId ? "儲存修改" : "儲存收藏"}</button><button type="button" className="outline" onClick={() => { setShowSaveForm(false); setEditingId(null); setExistingImagePath(null); setImageFile(null); setPlaceCountryCustom(false); setPlaceCityCustom(false); setPlaceRegionCustom(false); }}>取消</button></div>
       </form>}
 
       <div className="toolbar"><input className="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="⌕ 搜尋店家、城市、分類…"/><span className="muted small-text">共 {filtered.length} 筆</span></div>
