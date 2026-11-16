@@ -5,7 +5,8 @@ import type { FormEvent } from "react";
 import { getSupabase } from "@/lib/supabase";
 
 type Trip = { id: string; title: string; country: string | null; city: string | null; start_date: string | null; end_date: string | null; created_at: string };
-type Collection = { id: string; trip_id: string | null; place_name: string; country: string | null; city: string | null; region: string | null; category: string; address: string | null; source_url: string | null; notes: string | null; image_path: string | null; created_at: string };
+type Collection = { id: string; trip_id: string | null; place_name: string; country: string | null; city: string | null; region: string | null; category: string; address: string | null; source_url: string | null; notes: string | null; image_path: string | null; google_place_id: string | null; created_at: string; image_url?: string | null };
+type GooglePlace = { id: string; displayName: string; formattedAddress: string; googleMapsUri: string };
 
 const categories = ["景點", "美食", "購物", "住宿", "交通", "其他"];
 const supabase = getSupabase();
@@ -36,6 +37,12 @@ export default function Home() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [existingImagePath, setExistingImagePath] = useState<string | null>(null);
+  const [googleQuery, setGoogleQuery] = useState("");
+  const [googleResults, setGoogleResults] = useState<GooglePlace[]>([]);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [googleMessage, setGoogleMessage] = useState("");
+  const [googlePlaceId, setGooglePlaceId] = useState<string | null>(null);
+  const [selectedGooglePlace, setSelectedGooglePlace] = useState<GooglePlace | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -74,6 +81,49 @@ export default function Home() {
     else setMessage("登入成功。");
   }
 
+  async function searchGoogleMaps(e: FormEvent) {
+    e.preventDefault();
+    const query = googleQuery.trim();
+    if (query.length < 2) { setGoogleMessage("請至少輸入 2 個字再搜尋。"); return; }
+    setGoogleBusy(true); setGoogleMessage(""); setGoogleResults([]);
+    try {
+      const { data: authData } = await supabase.auth.getSession();
+      const accessToken = authData.session?.access_token;
+      if (!accessToken) { setGoogleMessage("登入狀態已失效，請重新登入。"); return; }
+      const response = await fetch("/api/places/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + accessToken },
+        body: JSON.stringify({ query }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Google Maps 搜尋失敗。");
+      const results = (result.places || []) as GooglePlace[];
+      setGoogleResults(results);
+      if (results.length === 0) setGoogleMessage("沒有找到符合的店家，試試加上城市或國家，例如「拉麵 沖繩」。");
+    } catch (error) {
+      setGoogleMessage(error instanceof Error ? error.message : "搜尋失敗，請稍後再試。");
+    } finally {
+      setGoogleBusy(false);
+    }
+  }
+
+  function startNewCollection() {
+    setEditingId(null); setExistingImagePath(null); setPlaceName(""); setPlaceCountry(""); setPlaceCity("");
+    setPlaceRegion(""); setCategory("景點"); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null);
+    setGooglePlaceId(null); setSelectedGooglePlace(null); setShowSaveForm(true);
+  }
+
+  function chooseGooglePlace(place: GooglePlace) {
+    startNewCollection();
+    setGooglePlaceId(place.id);
+    setSelectedGooglePlace(place);
+    // Keep the user's own search phrase as the saved label; Google Places content is not copied into the database.
+    setPlaceName(googleQuery.trim());
+    setGoogleMessage("");
+    setMessage("已選取 Google Maps 地點。請確認下方收藏名稱及分類，再儲存。");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function createTrip(e: FormEvent) {
     e.preventDefault(); if (!session) return;
     setBusy(true);
@@ -87,7 +137,7 @@ export default function Home() {
     e.preventDefault(); if (!session) return;
     if (!placeName.trim()) { setMessage("請先填寫地點或店家名稱"); return; }
     setBusy(true); setMessage("");
-    const duplicate = items.find(x => x.id !== editingId && x.place_name.trim().toLocaleLowerCase() === placeName.trim().toLocaleLowerCase() && (x.address || "").trim().toLocaleLowerCase() === address.trim().toLocaleLowerCase());
+    const duplicate = items.find(x => x.id !== editingId && ((googlePlaceId && x.google_place_id === googlePlaceId) || (x.place_name.trim().toLocaleLowerCase() === placeName.trim().toLocaleLowerCase() && (x.address || "").trim().toLocaleLowerCase() === address.trim().toLocaleLowerCase())));
     let image_path: string | null = existingImagePath;
     if (imageFile) {
       const safeName = imageFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -100,7 +150,7 @@ export default function Home() {
       trip_id: selectedTrip === "all" ? null : selectedTrip,
       place_name: placeName.trim(), country: placeCountry || null, city: placeCity || null,
       region: placeRegion || null, category, address: address || null, source_url: sourceUrl || null,
-      notes: notes || null, image_path
+      notes: notes || null, image_path, google_place_id: googlePlaceId
     };
     const result = editingId
       ? await supabase.from("collections").update(payload).eq("id", editingId)
@@ -109,7 +159,7 @@ export default function Home() {
     if (result.error) setMessage(result.error.message);
     else {
       setPlaceName(""); setPlaceCountry(""); setPlaceCity(""); setPlaceRegion(""); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null);
-      setEditingId(null); setExistingImagePath(null); setShowSaveForm(false);
+      setEditingId(null); setExistingImagePath(null); setGooglePlaceId(null); setSelectedGooglePlace(null); setShowSaveForm(false);
       setMessage(editingId ? "收藏已更新，家庭成員都能看到。" : duplicate ? "已新增收藏。提醒：找到名稱及地址相同的既有收藏，請確認是否重複。" : "收藏成功，已加入家庭共用清單！");
       loadData();
     }
@@ -118,6 +168,8 @@ export default function Home() {
   function editCollection(item: Collection) {
     setEditingId(item.id);
     setExistingImagePath(item.image_path);
+    setGooglePlaceId(item.google_place_id || null);
+    setSelectedGooglePlace(null);
     setPlaceName(item.place_name);
     setPlaceCountry(item.country || "");
     setPlaceCity(item.city || "");
@@ -193,9 +245,26 @@ export default function Home() {
         </button>)}
       </div>
 
-      <section className="section-heading collection-heading"><div><p className="eyebrow">SAVED PLACES</p><h2>收藏清單</h2></div><button className="primary" onClick={() => setShowSaveForm(!showSaveForm)}>＋ 新增收藏</button></section>
+      <section className="section-heading collection-heading"><div><p className="eyebrow">SAVED PLACES</p><h2>收藏清單</h2></div><button className="primary" onClick={() => showSaveForm ? setShowSaveForm(false) : startNewCollection()}>{showSaveForm ? "收起表單" : "＋ 新增收藏"}</button></section>
+      <section className="google-search-panel">
+        <div><p className="eyebrow">FIND A PLACE</p><h3>從 Google Maps 搜尋店家</h3><p className="muted small-text">輸入店名、景點或城市，例如「A&W 牧港店」或「沖繩水族館」。</p></div>
+        <form className="google-search-form" onSubmit={searchGoogleMaps}>
+          <input value={googleQuery} onChange={e => setGoogleQuery(e.target.value)} placeholder="輸入店家名稱或景點…" aria-label="搜尋 Google Maps 店家" />
+          <button className="primary" disabled={googleBusy || googleQuery.trim().length < 2}>{googleBusy ? "搜尋中…" : "搜尋 Google Maps"}</button>
+        </form>
+        {googleMessage && <p className="notice">{googleMessage}</p>}
+        {googleResults.length > 0 && <div className="google-results">
+          {googleResults.map(place => <article className="google-result-card" key={place.id}>
+            <div className="google-result-copy"><strong>{place.displayName}</strong><span>{place.formattedAddress}</span><a href={place.googleMapsUri} target="_blank" rel="noreferrer">在 Google Maps 查看 ↗</a></div>
+            <button type="button" className="outline small" onClick={() => chooseGooglePlace(place)}>選取</button>
+          </article>)}
+          <div className="google-attribution" translate="no">Google Maps</div>
+        </div>}
+      </section>
       {showSaveForm && <form className="panel form-grid" onSubmit={saveCollection}>
-        <div className="full-width"><h3>{editingId ? "編輯旅行收藏" : "新增一筆旅行收藏"}</h3><p className="muted small-text">目前可手動確認與修改資料；AI 自動辨識及分享接收將在下一個版本串接。</p></div>
+        <div className="full-width"><h3>{editingId ? "編輯旅行收藏" : "新增一筆旅行收藏"}</h3><p className="muted small-text">收藏名稱、分類、備註及地址由你自行確認與填寫。Google Maps 搜尋結果只供即時參考；My Travel 僅保存 Google Place ID，並提供地圖連結。</p></div>
+        {selectedGooglePlace && <div className="full-width google-selected"><strong>已選取 Google Maps 地點</strong><span>{selectedGooglePlace.displayName}</span><span className="muted small-text">{selectedGooglePlace.formattedAddress}</span><a href={selectedGooglePlace.googleMapsUri} target="_blank" rel="noreferrer">Google Maps ↗</a><p className="tiny muted">下方收藏名稱會使用你輸入的搜尋文字；可自行修改成自己的收藏名稱。</p></div>}
+        {googlePlaceId && !selectedGooglePlace && <div className="full-width google-selected"><span>這筆收藏已連結 Google Maps 地點。</span></div>}
         <label>地點／店家名稱 *<input required value={placeName} onChange={e => setPlaceName(e.target.value)} placeholder="例如：美麗海水族館"/></label>
         <label>所屬旅行<select value={selectedTrip} onChange={e => setSelectedTrip(e.target.value)}><option value="all">暫不指定／全部收藏</option>{trips.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select></label>
         <label>國家<input value={placeCountry} onChange={e => setPlaceCountry(e.target.value)} placeholder="日本"/></label>
@@ -215,10 +284,10 @@ export default function Home() {
           {(item as Collection & { image_url?: string | null }).image_url ? <img className="place-image" src={(item as Collection & { image_url?: string | null }).image_url || ""} alt={item.place_name}/> : <div className="image-placeholder">✧</div>}
           <div className="place-body"><div className="place-meta"><span>{item.category}</span><span>{[item.country, item.city, item.region].filter(Boolean).join(" · ")}</span></div>
             <h3>{item.place_name}</h3>{item.address && <p className="muted small-text">{item.address}</p>}{item.notes && <p className="notes">{item.notes}</p>}
-            <div className="place-actions">{item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer">查看原始貼文 ↗</a>}<span className="action-group"><button className="edit-link" onClick={() => editCollection(item)}>編輯</button><button className="danger-link" onClick={() => deleteCollection(item.id)}>刪除</button></span></div>
+            <div className="place-actions">{item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer">查看原始貼文 ↗</a>}{item.google_place_id && <a href={"https://www.google.com/maps/search/?api=1&query_place_id=" + encodeURIComponent(item.google_place_id)} target="_blank" rel="noreferrer">Google Maps ↗</a>}<span className="action-group"><button className="edit-link" onClick={() => editCollection(item)}>編輯</button><button className="danger-link" onClick={() => deleteCollection(item.id)}>刪除</button></span></div>
           </div>
         </article>)}</div>}
-      <footer>MY TRAVEL · YOUR PLACES, YOUR JOURNEYS</footer>
+      <footer>MY TRAVEL · YOUR PLACES, YOUR JOURNEYS · <a href="/terms">使用條款</a> · <a href="/privacy">隱私權政策</a></footer>
     </main>
   );
 }
