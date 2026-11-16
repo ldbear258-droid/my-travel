@@ -14,9 +14,11 @@ type ShoppingItem = {
   quantity: number | string;
   unit: string | null;
   currency: string;
-  estimated_unit_price: number | string | null;
-  actual_unit_price: number | string | null;
-  is_purchased: boolean;
+  estimated_price: number | string | null;
+  actual_price: number | string | null;
+  store_name: string | null;
+  product_url: string | null;
+  purchased: boolean;
   notes: string | null;
   created_at: string;
 };
@@ -296,6 +298,8 @@ export default function Home() {
   const [shoppingEditingId, setShoppingEditingId] = useState<string | null>(null);
   const [shoppingBusy, setShoppingBusy] = useState(false);
   const [shoppingName, setShoppingName] = useState("");
+  const [shoppingStoreName, setShoppingStoreName] = useState("");
+  const [shoppingProductUrl, setShoppingProductUrl] = useState("");
   const [shoppingCategory, setShoppingCategory] = useState("其他");
   const [shoppingTripId, setShoppingTripId] = useState("all");
   const [shoppingQuantity, setShoppingQuantity] = useState("1");
@@ -604,6 +608,8 @@ export default function Home() {
   function resetShoppingForm() {
     setShoppingEditingId(null);
     setShoppingName("");
+    setShoppingStoreName("");
+    setShoppingProductUrl("");
     setShoppingCategory("其他");
     setShoppingTripId(selectedTrip);
     setShoppingQuantity("1");
@@ -622,13 +628,15 @@ export default function Home() {
   function editShoppingItem(item: ShoppingItem) {
     setShoppingEditingId(item.id);
     setShoppingName(item.item_name);
+    setShoppingStoreName(item.store_name || "");
+    setShoppingProductUrl(item.product_url || "");
     setShoppingCategory(item.category);
     setShoppingTripId(item.trip_id || "all");
     setShoppingQuantity(String(item.quantity ?? 1));
     setShoppingUnit(item.unit || "");
     setShoppingCurrency(item.currency || "TWD");
-    setShoppingEstimatedPrice(item.estimated_unit_price === null ? "" : String(item.estimated_unit_price));
-    setShoppingActualPrice(item.actual_unit_price === null ? "" : String(item.actual_unit_price));
+    setShoppingEstimatedPrice(item.estimated_price === null ? "" : String(item.estimated_price));
+    setShoppingActualPrice(item.actual_price === null ? "" : String(item.actual_price));
     setShoppingNotes(item.notes || "");
     setShoppingFormOpen(true);
   }
@@ -657,13 +665,15 @@ export default function Home() {
     setMessage("");
     const payload = {
       item_name: shoppingName.trim(),
+      store_name: shoppingStoreName.trim() || null,
+      product_url: shoppingProductUrl.trim() || null,
       category: shoppingCategory,
       trip_id: shoppingTripId === "all" ? null : shoppingTripId,
       quantity,
       unit: shoppingUnit.trim() || null,
       currency: shoppingCurrency,
-      estimated_unit_price: estimated,
-      actual_unit_price: actual,
+      estimated_price: estimated,
+      actual_price: actual,
       notes: shoppingNotes.trim() || null,
     };
     const result = shoppingEditingId
@@ -680,10 +690,10 @@ export default function Home() {
   }
 
   async function toggleShoppingPurchased(item: ShoppingItem, purchased: boolean) {
-    setShoppingItems(previous => previous.map(row => row.id === item.id ? { ...row, is_purchased: purchased } : row));
-    const { error } = await supabase.from("shopping_items").update({ is_purchased: purchased }).eq("id", item.id);
+    setShoppingItems(previous => previous.map(row => row.id === item.id ? { ...row, purchased } : row));
+    const { error } = await supabase.from("shopping_items").update({ purchased }).eq("id", item.id);
     if (error) {
-      setShoppingItems(previous => previous.map(row => row.id === item.id ? { ...row, is_purchased: item.is_purchased } : row));
+      setShoppingItems(previous => previous.map(row => row.id === item.id ? { ...row, purchased: item.purchased } : row));
       setMessage("更新購買狀態失敗：" + error.message);
     }
   }
@@ -715,8 +725,8 @@ export default function Home() {
     for (const item of filteredShoppingItems) {
       const current = totals.get(item.currency) || { estimated: 0, actual: 0 };
       const quantity = Number(item.quantity || 0);
-      current.estimated += quantity * Number(item.estimated_unit_price || 0);
-      current.actual += quantity * Number(item.actual_unit_price || 0);
+      current.estimated += quantity * Number(item.estimated_price || 0);
+      current.actual += quantity * Number(item.actual_price || 0);
       totals.set(item.currency, current);
     }
     return Array.from(totals.entries()).map(([currency, values]) => ({ currency, ...values }));
@@ -950,7 +960,7 @@ export default function Home() {
 
         <div className="shopping-summary">
           <div className="shopping-summary-stat"><strong>{filteredShoppingItems.length}</strong><span>清單項目</span></div>
-          <div className="shopping-summary-stat"><strong>{filteredShoppingItems.filter(item => item.is_purchased).length}</strong><span>已購買</span></div>
+          <div className="shopping-summary-stat"><strong>{filteredShoppingItems.filter(item => item.purchased).length}</strong><span>已購買</span></div>
           <div className="shopping-summary-totals">
             {shoppingTotals.length === 0 ? <span className="muted small-text">尚無金額紀錄</span> : shoppingTotals.map(total => (
               <div className="shopping-total-line" key={total.currency}>
@@ -975,6 +985,8 @@ export default function Home() {
         {shoppingFormOpen && <form className="panel form-grid shopping-form" onSubmit={saveShoppingItem}>
           <div className="full-width"><h3>{shoppingEditingId ? "編輯購物項目" : "新增購物項目"}</h3><p className="muted small-text">預估與實際價格都是單件／單位價格，系統會依數量計算小計。</p></div>
           <label>商品／物品名稱 *<input required maxLength={200} value={shoppingName} onChange={event => setShoppingName(event.target.value)} placeholder="例如：防曬乳、伴手禮、球鞋"/></label>
+          <label>購買店家（選填）<input value={shoppingStoreName} onChange={event => setShoppingStoreName(event.target.value)} placeholder="例如：唐吉訶德、Outlet"/></label>
+          <label>商品網址（選填）<input type="url" value={shoppingProductUrl} onChange={event => setShoppingProductUrl(event.target.value)} placeholder="https://..."/></label>
           <label>分類<select value={shoppingCategory} onChange={event => setShoppingCategory(event.target.value)}>{SHOPPING_CATEGORIES.map(category => <option key={category}>{category}</option>)}</select></label>
           <label>所屬旅行<select value={shoppingTripId} onChange={event => setShoppingTripId(event.target.value)}><option value="all">暫不指定／全部清單</option>{trips.map(trip => <option key={trip.id} value={trip.id}>{trip.title}</option>)}</select></label>
           <div className="shopping-quantity-row">
@@ -995,13 +1007,13 @@ export default function Home() {
             {filteredShoppingItems.map(item => {
               const quantity = Number(item.quantity || 0);
               const tripTitle = trips.find(trip => trip.id === item.trip_id)?.title;
-              const estimatedSubtotal = item.estimated_unit_price === null ? null : quantity * Number(item.estimated_unit_price);
-              const actualSubtotal = item.actual_unit_price === null ? null : quantity * Number(item.actual_unit_price);
-              return <article className={item.is_purchased ? "shopping-item-card purchased" : "shopping-item-card"} key={item.id}>
+              const estimatedSubtotal = item.estimated_price === null ? null : quantity * Number(item.estimated_price);
+              const actualSubtotal = item.actual_price === null ? null : quantity * Number(item.actual_price);
+              return <article className={item.purchased ? "shopping-item-card purchased" : "shopping-item-card"} key={item.id}>
                 <div className="shopping-item-header">
                   <label className="shopping-purchased-toggle">
-                    <input type="checkbox" checked={item.is_purchased} onChange={event => toggleShoppingPurchased(item, event.target.checked)} aria-label={item.item_name + " 已購買"}/>
-                    <span>{item.is_purchased ? "已購買" : "尚未購買"}</span>
+                    <input type="checkbox" checked={item.purchased} onChange={event => toggleShoppingPurchased(item, event.target.checked)} aria-label={item.item_name + " 已購買"}/>
+                    <span>{item.purchased ? "已購買" : "尚未購買"}</span>
                   </label>
                   <div className="shopping-item-actions">
                     <button type="button" className="edit-link" onClick={() => editShoppingItem(item)}>編輯</button>
