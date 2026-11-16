@@ -22,7 +22,7 @@ type ShoppingItem = {
   notes: string | null;
   created_at: string;
 };
-type Collection = { id: string; trip_id: string | null; place_name: string; country: string | null; city: string | null; region: string | null; category: string; address: string | null; source_url: string | null; notes: string | null; image_path: string | null; google_place_id: string | null; visited: boolean; experience_rating: number | null; collection_scope: "travel" | "food_drink"; itinerary_day: number | null; created_at: string; image_url?: string | null };
+type Collection = { id: string; trip_id: string | null; place_name: string; country: string | null; city: string | null; region: string | null; category: string; address: string | null; source_url: string | null; notes: string | null; image_path: string | null; google_place_id: string | null; visited: boolean; experience_rating: number | null; collection_scope: "travel" | "food_drink"; itinerary_day: number | null; reservation_time: string | null; itinerary_order: number; created_at: string; image_url?: string | null };
 type GoogleAddressComponent = { longText?: string; shortText?: string; types?: string[] };
 type GooglePlace = { id: string; displayName: string; formattedAddress: string; googleMapsUri: string; addressComponents?: GoogleAddressComponent[] };
 type GooglePhotoAuthor = { displayName?: string; uri?: string; photoUri?: string };
@@ -311,6 +311,9 @@ export default function Home() {
   const [shoppingNotes, setShoppingNotes] = useState("");
   const [inlineSavingIds, setInlineSavingIds] = useState<string[]>([]);
   const [selectedTrip, setSelectedTrip] = useState("all");
+  const [itinerarySortMode, setItinerarySortMode] = useState<"custom" | "time">("custom");
+  const [draggedItineraryId, setDraggedItineraryId] = useState<string | null>(null);
+  const [itineraryOrderSaving, setItineraryOrderSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -329,6 +332,7 @@ export default function Home() {
   const [placeName, setPlaceName] = useState("");
   const [collectionScope, setCollectionScope] = useState<"travel" | "food_drink">("travel");
   const [itineraryDay, setItineraryDay] = useState("");
+  const [reservationTime, setReservationTime] = useState("");
   const [placeCountry, setPlaceCountry] = useState("");
   const [placeCity, setPlaceCity] = useState("");
   const [placeRegion, setPlaceRegion] = useState("");
@@ -464,6 +468,7 @@ export default function Home() {
     const nextScope = activePage === "food_drink" ? "food_drink" : "travel";
     setCollectionScope(nextScope);
     setItineraryDay("");
+    setReservationTime("");
     setEditingId(null); setExistingImagePath(null); setPlaceName(""); setPlaceCountry(""); setPlaceCity("");
     setPlaceRegion(""); setPlaceCountryCustom(false); setPlaceCityCustom(false); setPlaceRegionCustom(false);
     setCategory(nextScope === "food_drink" ? "美食" : "景點"); setVisited(false); setExperienceRating(""); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null);
@@ -532,6 +537,12 @@ export default function Home() {
       collection_scope: collectionScope,
       trip_id: collectionScope === "travel" && selectedTrip !== "all" ? selectedTrip : null,
       itinerary_day: collectionScope === "travel" ? dayNumber : null,
+      reservation_time: collectionScope === "travel" && reservationTime ? reservationTime : null,
+      itinerary_order: collectionScope === "travel" && dayNumber !== null
+        ? (editingId && items.find(item => item.id === editingId)?.trip_id === (selectedTrip === "all" ? null : selectedTrip) && items.find(item => item.id === editingId)?.itinerary_day === dayNumber
+            ? (items.find(item => item.id === editingId)?.itinerary_order || 0)
+            : Math.max(0, ...items.filter(item => item.collection_scope === "travel" && item.trip_id === selectedTrip && item.itinerary_day === dayNumber && item.id !== editingId).map(item => item.itinerary_order || 0)) + 1)
+        : 0,
       place_name: placeName.trim(),
       // Google Maps content is displayed from a fresh lookup; only its exempt Place ID is persisted.
       country: googlePlaceId ? null : (placeCountry || null),
@@ -550,7 +561,7 @@ export default function Home() {
     setBusy(false);
     if (result.error) setMessage(result.error.message);
     else {
-      setPlaceName(""); setPlaceCountry(""); setPlaceCity(""); setPlaceRegion(""); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null); setGoogleMunicipality(""); setVisited(false); setExperienceRating(""); setItineraryDay("");
+      setPlaceName(""); setPlaceCountry(""); setPlaceCity(""); setPlaceRegion(""); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null); setGoogleMunicipality(""); setVisited(false); setExperienceRating(""); setItineraryDay(""); setReservationTime("");
       setEditingId(null); setExistingImagePath(null); setGooglePlaceId(null); setSelectedGooglePlace(null); setShowSaveForm(false);
       setMessage(duplicate ? "已新增收藏，但找到名稱及地址相同的既有收藏，請確認是否重複。" : "");
       loadData();
@@ -565,6 +576,7 @@ export default function Home() {
     setEditingId(item.id);
     setCollectionScope(item.collection_scope || "travel");
     setItineraryDay(item.itinerary_day ? String(item.itinerary_day) : "");
+    setReservationTime(item.reservation_time ? item.reservation_time.slice(0, 5) : "");
     setExistingImagePath(item.image_path);
     setGooglePlaceId(item.google_place_id || null);
     setSelectedGooglePlace(livePlace);
