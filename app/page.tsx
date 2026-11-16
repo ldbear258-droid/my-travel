@@ -274,11 +274,8 @@ export default function Home() {
     setPlaceName(googleQuery.trim());
     applyGooglePlaceToForm(place);
     setGoogleMessage("");
-    // Successful selection stays quiet; bring the newly opened form into view instead of jumping to page top.
+    // Successful selection stays quiet and preserves the user's current scroll position.
     setMessage("");
-    window.requestAnimationFrame(() => {
-      document.getElementById("save-collection-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
   }
 
   async function createTrip(e: FormEvent) {
