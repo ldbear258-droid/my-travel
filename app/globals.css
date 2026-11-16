@@ -30,3 +30,14 @@ footer a{color:var(--muted);text-decoration:none}
 .trip-delete-btn:disabled{opacity:.5;cursor:wait}
 
 .location-hint{display:block;color:var(--muted);font-size:11px;line-height:1.5;margin-top:4px}
+
+
+.visit-tracker{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;border:1px solid var(--line);border-radius:12px;padding:14px;background:#fbfcfa}
+.visited-toggle{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:700;color:var(--ink);cursor:pointer}
+.visited-toggle input[type="checkbox"]{width:19px;height:19px;margin:0;accent-color:var(--green);flex:0 0 auto}
+.experience-rating-label{max-width:100%;font-weight:600}
+.experience-rating-label select:disabled{background:#f2f4f1;color:#98a39b;cursor:not-allowed}
+.visit-summary{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
+.visited-chip,.rating-chip{display:inline-flex;align-items:center;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:700}
+.visited-chip{background:#eaf2e9;color:#315d4c}
+.rating-chip{background:#f5f0e5;color:#76613b}
