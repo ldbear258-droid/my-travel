@@ -34,6 +34,8 @@ export default function Home() {
   const [sourceUrl, setSourceUrl] = useState("");
   const [notes, setNotes] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [existingImagePath, setExistingImagePath] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -85,8 +87,8 @@ export default function Home() {
     e.preventDefault(); if (!session) return;
     if (!placeName.trim()) { setMessage("請先填寫地點或店家名稱"); return; }
     setBusy(true); setMessage("");
-    const duplicate = items.find(x => x.place_name.trim().toLocaleLowerCase() === placeName.trim().toLocaleLowerCase() && (x.address || "").trim().toLocaleLowerCase() === address.trim().toLocaleLowerCase());
-    let image_path: string | null = null;
+    const duplicate = items.find(x => x.id !== editingId && x.place_name.trim().toLocaleLowerCase() === placeName.trim().toLocaleLowerCase() && (x.address || "").trim().toLocaleLowerCase() === address.trim().toLocaleLowerCase());
+    let image_path: string | null = existingImagePath;
     if (imageFile) {
       const safeName = imageFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
       const path = `${session.user.id}/${Date.now()}-${safeName}`;
@@ -94,19 +96,41 @@ export default function Home() {
       if (uploadError) { setBusy(false); setMessage("圖片上傳失敗：" + uploadError.message); return; }
       image_path = path;
     }
-    const { error } = await supabase.from("collections").insert({
-      user_id: session.user.id, trip_id: selectedTrip === "all" ? null : selectedTrip,
+    const payload = {
+      trip_id: selectedTrip === "all" ? null : selectedTrip,
       place_name: placeName.trim(), country: placeCountry || null, city: placeCity || null,
       region: placeRegion || null, category, address: address || null, source_url: sourceUrl || null,
       notes: notes || null, image_path
-    });
+    };
+    const result = editingId
+      ? await supabase.from("collections").update(payload).eq("id", editingId).eq("user_id", session.user.id)
+      : await supabase.from("collections").insert({ ...payload, user_id: session.user.id });
     setBusy(false);
-    if (error) setMessage(error.message);
+    if (result.error) setMessage(result.error.message);
     else {
       setPlaceName(""); setPlaceCountry(""); setPlaceCity(""); setPlaceRegion(""); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null);
-      setShowSaveForm(false); setMessage(duplicate ? "已新增收藏。提醒：找到名稱及地址相同的既有收藏，請確認是否重複。" : "收藏成功！");
+      setEditingId(null); setExistingImagePath(null); setShowSaveForm(false);
+      setMessage(editingId ? "收藏已更新。" : duplicate ? "已新增收藏。提醒：找到名稱及地址相同的既有收藏，請確認是否重複。" : "收藏成功！");
       loadData();
     }
+  }
+
+  function editCollection(item: Collection) {
+    setEditingId(item.id);
+    setExistingImagePath(item.image_path);
+    setPlaceName(item.place_name);
+    setPlaceCountry(item.country || "");
+    setPlaceCity(item.city || "");
+    setPlaceRegion(item.region || "");
+    setCategory(item.category);
+    setAddress(item.address || "");
+    setSourceUrl(item.source_url || "");
+    setNotes(item.notes || "");
+    setImageFile(null);
+    setSelectedTrip(item.trip_id || "all");
+    setShowSaveForm(true);
+    setMessage("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function deleteCollection(id: string) {
@@ -171,7 +195,7 @@ export default function Home() {
 
       <section className="section-heading collection-heading"><div><p className="eyebrow">SAVED PLACES</p><h2>收藏清單</h2></div><button className="primary" onClick={() => setShowSaveForm(!showSaveForm)}>＋ 新增收藏</button></section>
       {showSaveForm && <form className="panel form-grid" onSubmit={saveCollection}>
-        <div className="full-width"><h3>新增一筆旅行收藏</h3><p className="muted small-text">第一版先手動確認資料；AI 自動辨識及分享接收將在下一個版本串接。</p></div>
+        <div className="full-width"><h3>{editingId ? "編輯旅行收藏" : "新增一筆旅行收藏"}</h3><p className="muted small-text">目前可手動確認與修改資料；AI 自動辨識及分享接收將在下一個版本串接。</p></div>
         <label>地點／店家名稱 *<input required value={placeName} onChange={e => setPlaceName(e.target.value)} placeholder="例如：美麗海水族館"/></label>
         <label>所屬旅行<select value={selectedTrip} onChange={e => setSelectedTrip(e.target.value)}><option value="all">暫不指定／全部收藏</option>{trips.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select></label>
         <label>國家<input value={placeCountry} onChange={e => setPlaceCountry(e.target.value)} placeholder="日本"/></label>
@@ -182,7 +206,7 @@ export default function Home() {
         <label className="full-width">原始貼文網址<input type="url" value={sourceUrl} onChange={e => setSourceUrl(e.target.value)} placeholder="https://..."/></label>
         <label className="full-width">備註<textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="想吃什麼、注意事項、推薦原因…"/></label>
         <label className="full-width">貼文圖片／截圖<input type="file" accept="image/*" onChange={e => setImageFile(e.target.files?.[0] || null)}/></label>
-        <div className="form-actions"><button className="primary" disabled={busy}>{busy ? "儲存中…" : "儲存收藏"}</button><button type="button" className="outline" onClick={() => setShowSaveForm(false)}>取消</button></div>
+        <div className="form-actions"><button className="primary" disabled={busy}>{busy ? "儲存中…" : editingId ? "儲存修改" : "儲存收藏"}</button><button type="button" className="outline" onClick={() => { setShowSaveForm(false); setEditingId(null); setExistingImagePath(null); setImageFile(null); }}>取消</button></div>
       </form>}
 
       <div className="toolbar"><input className="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="⌕ 搜尋店家、城市、分類…"/><span className="muted small-text">共 {filtered.length} 筆</span></div>
@@ -191,7 +215,7 @@ export default function Home() {
           {(item as Collection & { image_url?: string | null }).image_url ? <img className="place-image" src={(item as Collection & { image_url?: string | null }).image_url || ""} alt={item.place_name}/> : <div className="image-placeholder">✧</div>}
           <div className="place-body"><div className="place-meta"><span>{item.category}</span><span>{[item.country, item.city, item.region].filter(Boolean).join(" · ")}</span></div>
             <h3>{item.place_name}</h3>{item.address && <p className="muted small-text">{item.address}</p>}{item.notes && <p className="notes">{item.notes}</p>}
-            <div className="place-actions">{item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer">查看原始貼文 ↗</a>}<button className="danger-link" onClick={() => deleteCollection(item.id)}>刪除</button></div>
+            <div className="place-actions">{item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer">查看原始貼文 ↗</a>}<span className="action-group"><button className="edit-link" onClick={() => editCollection(item)}>編輯</button><button className="danger-link" onClick={() => deleteCollection(item.id)}>刪除</button></span></div>
           </div>
         </article>)}</div>}
       <footer>MY TRAVEL · YOUR PLACES, YOUR JOURNEYS</footer>
