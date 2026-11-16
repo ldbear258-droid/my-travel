@@ -797,6 +797,12 @@ export default function Home() {
         </div>)}
       </div>
 
+      <nav className="app-tabs" aria-label="My Travel 功能">
+        <button type="button" className={activePage === "collections" ? "app-tab active" : "app-tab"} onClick={() => setActivePage("collections")}>收藏地點</button>
+        <button type="button" className={activePage === "shopping" ? "app-tab active" : "app-tab"} onClick={() => setActivePage("shopping")}>購物清單 <span>{shoppingItems.length}</span></button>
+      </nav>
+
+      {activePage === "collections" && <>
       <section className="section-heading collection-heading"><div><p className="eyebrow">SAVED PLACES</p><h2>收藏清單</h2></div><button className="primary" onClick={() => showSaveForm ? setShowSaveForm(false) : startNewCollection()}>{showSaveForm ? "收起表單" : "＋ 新增收藏"}</button></section>
       <section className="google-search-panel">
         <div><p className="eyebrow">FIND A PLACE</p><h3>從 Google Maps 搜尋店家</h3><p className="muted small-text">輸入店名、景點或城市，例如「A&W 牧港店」或「沖繩水族館」。</p></div>
@@ -933,6 +939,88 @@ export default function Home() {
             </div>}
           </div>
         </article>)}</div>}
+      </>}
+
+      {activePage === "shopping" && <section className="shopping-page">
+        <section className="section-heading collection-heading">
+          <div><p className="eyebrow">TRAVEL SHOPPING</p><h2>購物清單</h2></div>
+          <button className="primary" onClick={() => shoppingFormOpen ? setShoppingFormOpen(false) : startShoppingItem()}>{shoppingFormOpen ? "收起表單" : "＋ 新增項目"}</button>
+        </section>
+        <p className="muted small-text shopping-intro">把旅途中想買的商品先記下來，記錄數量、預算與實際花費；勾選已購買後，家庭成員也會同步看到。</p>
+
+        <div className="shopping-summary">
+          <div className="shopping-summary-stat"><strong>{filteredShoppingItems.length}</strong><span>清單項目</span></div>
+          <div className="shopping-summary-stat"><strong>{filteredShoppingItems.filter(item => item.is_purchased).length}</strong><span>已購買</span></div>
+          <div className="shopping-summary-totals">
+            {shoppingTotals.length === 0 ? <span className="muted small-text">尚無金額紀錄</span> : shoppingTotals.map(total => (
+              <div className="shopping-total-line" key={total.currency}>
+                <span>{total.currency}</span>
+                <span>預估 {formatShoppingMoney(total.estimated, total.currency)}</span>
+                <span>實際 {formatShoppingMoney(total.actual, total.currency)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="shopping-toolbar">
+          <input className="search" value={shoppingSearch} onChange={event => setShoppingSearch(event.target.value)} placeholder="⌕ 搜尋商品、分類、備註…" aria-label="搜尋購物項目"/>
+          <label className="shopping-trip-filter">所屬旅行
+            <select value={selectedTrip} onChange={event => setSelectedTrip(event.target.value)}>
+              <option value="all">全部旅行</option>
+              {trips.map(trip => <option key={trip.id} value={trip.id}>{trip.title}</option>)}
+            </select>
+          </label>
+        </div>
+
+        {shoppingFormOpen && <form className="panel form-grid shopping-form" onSubmit={saveShoppingItem}>
+          <div className="full-width"><h3>{shoppingEditingId ? "編輯購物項目" : "新增購物項目"}</h3><p className="muted small-text">預估與實際價格都是單件／單位價格，系統會依數量計算小計。</p></div>
+          <label>商品／物品名稱 *<input required maxLength={200} value={shoppingName} onChange={event => setShoppingName(event.target.value)} placeholder="例如：防曬乳、伴手禮、球鞋"/></label>
+          <label>分類<select value={shoppingCategory} onChange={event => setShoppingCategory(event.target.value)}>{SHOPPING_CATEGORIES.map(category => <option key={category}>{category}</option>)}</select></label>
+          <label>所屬旅行<select value={shoppingTripId} onChange={event => setShoppingTripId(event.target.value)}><option value="all">暫不指定／全部清單</option>{trips.map(trip => <option key={trip.id} value={trip.id}>{trip.title}</option>)}</select></label>
+          <div className="shopping-quantity-row">
+            <label>數量<input type="number" min="0.01" step="0.01" required value={shoppingQuantity} onChange={event => setShoppingQuantity(event.target.value)}/></label>
+            <label>單位（選填）<input value={shoppingUnit} onChange={event => setShoppingUnit(event.target.value)} placeholder="個、瓶、盒"/></label>
+          </div>
+          <label>幣別<select value={shoppingCurrency} onChange={event => setShoppingCurrency(event.target.value)}>{SHOPPING_CURRENCIES.map(currency => <option key={currency.code} value={currency.code}>{currency.label}</option>)}</select></label>
+          <label>預估單價<input type="number" min="0" step="0.01" value={shoppingEstimatedPrice} onChange={event => setShoppingEstimatedPrice(event.target.value)} placeholder="可先留空"/></label>
+          <label>實際單價<input type="number" min="0" step="0.01" value={shoppingActualPrice} onChange={event => setShoppingActualPrice(event.target.value)} placeholder="購買後再填寫"/></label>
+          <label className="full-width">備註<textarea value={shoppingNotes} onChange={event => setShoppingNotes(event.target.value)} placeholder="品牌、規格、購買地點、送給誰…"/></label>
+          <div className="form-actions"><button className="primary" disabled={shoppingBusy}>{shoppingBusy ? "儲存中…" : shoppingEditingId ? "儲存修改" : "新增購物項目"}</button><button type="button" className="outline" onClick={() => { setShoppingFormOpen(false); resetShoppingForm(); }}>取消</button></div>
+        </form>}
+
+        {filteredShoppingItems.length === 0 ? (
+          <div className="empty"><div>🛍</div><h3>{shoppingSearch ? "找不到符合的購物項目" : "購物清單還是空的"}</h3><p className="muted">先把旅行中想買的東西記下來，之後再慢慢補上價格與購買狀態。</p><button className="primary" onClick={startShoppingItem}>新增第一個項目</button></div>
+        ) : (
+          <div className="shopping-list">
+            {filteredShoppingItems.map(item => {
+              const quantity = Number(item.quantity || 0);
+              const tripTitle = trips.find(trip => trip.id === item.trip_id)?.title;
+              const estimatedSubtotal = item.estimated_unit_price === null ? null : quantity * Number(item.estimated_unit_price);
+              const actualSubtotal = item.actual_unit_price === null ? null : quantity * Number(item.actual_unit_price);
+              return <article className={item.is_purchased ? "shopping-item-card purchased" : "shopping-item-card"} key={item.id}>
+                <div className="shopping-item-header">
+                  <label className="shopping-purchased-toggle">
+                    <input type="checkbox" checked={item.is_purchased} onChange={event => toggleShoppingPurchased(item, event.target.checked)} aria-label={item.item_name + " 已購買"}/>
+                    <span>{item.is_purchased ? "已購買" : "尚未購買"}</span>
+                  </label>
+                  <div className="shopping-item-actions">
+                    <button type="button" className="edit-link" onClick={() => editShoppingItem(item)}>編輯</button>
+                    <button type="button" className="danger-link" onClick={() => deleteShoppingItem(item)}>刪除</button>
+                  </div>
+                </div>
+                <h3 className="shopping-item-name">{item.item_name}</h3>
+                <div className="shopping-item-meta"><span>{item.category}</span><span>{tripTitle || "未指定旅行"}</span><span>數量：{quantity}{item.unit || ""}</span></div>
+                <div className="shopping-price-grid">
+                  <div><span>預估小計</span><strong>{formatShoppingMoney(estimatedSubtotal, item.currency)}</strong></div>
+                  <div><span>實際小計</span><strong>{formatShoppingMoney(actualSubtotal, item.currency)}</strong></div>
+                </div>
+                {item.notes && <p className="shopping-item-notes">{item.notes}</p>}
+              </article>;
+            })}
+          </div>
+        )}
+      </section>}
+
       <footer>MY TRAVEL · YOUR PLACES, YOUR JOURNEYS · <a href="/terms">使用條款</a> · <a href="/privacy">隱私權政策</a></footer>
     </main>
   );
