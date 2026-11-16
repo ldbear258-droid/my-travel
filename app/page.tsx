@@ -5,6 +5,21 @@ import type { FormEvent } from "react";
 import { getSupabase } from "@/lib/supabase";
 
 type Trip = { id: string; title: string; country: string | null; city: string | null; start_date: string | null; end_date: string | null; created_at: string };
+type ShoppingItem = {
+  id: string;
+  user_id: string;
+  trip_id: string | null;
+  item_name: string;
+  category: string;
+  quantity: number | string;
+  unit: string | null;
+  currency: string;
+  estimated_unit_price: number | string | null;
+  actual_unit_price: number | string | null;
+  is_purchased: boolean;
+  notes: string | null;
+  created_at: string;
+};
 type Collection = { id: string; trip_id: string | null; place_name: string; country: string | null; city: string | null; region: string | null; category: string; address: string | null; source_url: string | null; notes: string | null; image_path: string | null; google_place_id: string | null; visited: boolean; experience_rating: number | null; created_at: string; image_url?: string | null };
 type GoogleAddressComponent = { longText?: string; shortText?: string; types?: string[] };
 type GooglePlace = { id: string; displayName: string; formattedAddress: string; googleMapsUri: string; addressComponents?: GoogleAddressComponent[] };
@@ -114,6 +129,23 @@ const LOCATION_OPTIONS: Record<string, Record<string, string[]>> = {
 };
 const COUNTRY_OPTIONS = Object.keys(LOCATION_OPTIONS);
 const categories = ["景點", "美食", "購物", "住宿", "交通", "其他"];
+const SHOPPING_CATEGORIES = ["藥妝／保養", "食品／伴手禮", "服飾／鞋包", "3C／電器", "生活用品", "玩具／親子", "其他"];
+const SHOPPING_CURRENCIES = [
+  { code: "TWD", label: "新台幣 TWD" },
+  { code: "JPY", label: "日圓 JPY" },
+  { code: "USD", label: "美元 USD" },
+  { code: "KRW", label: "韓元 KRW" },
+  { code: "HKD", label: "港幣 HKD" },
+  { code: "CNY", label: "人民幣 CNY" },
+  { code: "THB", label: "泰銖 THB" },
+  { code: "SGD", label: "新加坡幣 SGD" },
+  { code: "EUR", label: "歐元 EUR" },
+];
+function formatShoppingMoney(amount: number | string | null, currency: string) {
+  if (amount === null || amount === "") return "未填寫";
+  const value = Number(amount);
+  return Number.isFinite(value) ? currency + " " + value.toLocaleString("zh-TW", { maximumFractionDigits: 2 }) : "未填寫";
+}
 const EXPERIENCE_RATINGS: Record<string, { question: string; options: string[] }> = {
   "景點": { question: "玩起來如何？", options: ["非常好玩", "好玩", "普通", "不好玩"] },
   "美食": { question: "好不好吃？", options: ["非常好吃", "好吃", "普通", "不好吃"] },
@@ -257,6 +289,21 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [trips, setTrips] = useState<Trip[]>([]);
   const [items, setItems] = useState<Collection[]>([]);
+  const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([]);
+  const [activePage, setActivePage] = useState<"collections" | "shopping">("collections");
+  const [shoppingSearch, setShoppingSearch] = useState("");
+  const [shoppingFormOpen, setShoppingFormOpen] = useState(false);
+  const [shoppingEditingId, setShoppingEditingId] = useState<string | null>(null);
+  const [shoppingBusy, setShoppingBusy] = useState(false);
+  const [shoppingName, setShoppingName] = useState("");
+  const [shoppingCategory, setShoppingCategory] = useState("其他");
+  const [shoppingTripId, setShoppingTripId] = useState("all");
+  const [shoppingQuantity, setShoppingQuantity] = useState("1");
+  const [shoppingUnit, setShoppingUnit] = useState("");
+  const [shoppingCurrency, setShoppingCurrency] = useState("TWD");
+  const [shoppingEstimatedPrice, setShoppingEstimatedPrice] = useState("");
+  const [shoppingActualPrice, setShoppingActualPrice] = useState("");
+  const [shoppingNotes, setShoppingNotes] = useState("");
   const [inlineSavingIds, setInlineSavingIds] = useState<string[]>([]);
   const [selectedTrip, setSelectedTrip] = useState("all");
   const [search, setSearch] = useState("");
@@ -307,15 +354,21 @@ export default function Home() {
   }, [session?.user?.id]);
 
   async function loadData() {
-    const [{ data: tripData, error: tripError }, { data: collectionData, error: collectionError }] = await Promise.all([
+    const [
+      { data: tripData, error: tripError },
+      { data: collectionData, error: collectionError },
+      { data: shoppingData, error: shoppingError },
+    ] = await Promise.all([
       supabase.from("trips").select("*").order("created_at", { ascending: false }),
       supabase.from("collections").select("*").order("created_at", { ascending: false }),
+      supabase.from("shopping_items").select("*").order("created_at", { ascending: false }),
     ]);
-    if (tripError || collectionError) {
-      setMessage(tripError?.message || collectionError?.message || "讀取資料失敗");
+    if (tripError || collectionError || shoppingError) {
+      setMessage(tripError?.message || collectionError?.message || shoppingError?.message || "讀取資料失敗");
       return;
     }
     setTrips((tripData || []) as Trip[]);
+    setShoppingItems((shoppingData || []) as ShoppingItem[]);
     const rows = (collectionData || []) as Collection[];
     const withSignedImages = await Promise.all(rows.map(async (row) => {
       if (!row.image_path) return row;
@@ -548,11 +601,126 @@ export default function Home() {
     if (error) setMessage(error.message); else { setMessage(""); loadData(); }
   }
 
+  function resetShoppingForm() {
+    setShoppingEditingId(null);
+    setShoppingName("");
+    setShoppingCategory("其他");
+    setShoppingTripId(selectedTrip);
+    setShoppingQuantity("1");
+    setShoppingUnit("");
+    setShoppingCurrency("TWD");
+    setShoppingEstimatedPrice("");
+    setShoppingActualPrice("");
+    setShoppingNotes("");
+  }
+
+  function startShoppingItem() {
+    resetShoppingForm();
+    setShoppingFormOpen(true);
+  }
+
+  function editShoppingItem(item: ShoppingItem) {
+    setShoppingEditingId(item.id);
+    setShoppingName(item.item_name);
+    setShoppingCategory(item.category);
+    setShoppingTripId(item.trip_id || "all");
+    setShoppingQuantity(String(item.quantity ?? 1));
+    setShoppingUnit(item.unit || "");
+    setShoppingCurrency(item.currency || "TWD");
+    setShoppingEstimatedPrice(item.estimated_unit_price === null ? "" : String(item.estimated_unit_price));
+    setShoppingActualPrice(item.actual_unit_price === null ? "" : String(item.actual_unit_price));
+    setShoppingNotes(item.notes || "");
+    setShoppingFormOpen(true);
+  }
+
+  async function saveShoppingItem(event: FormEvent) {
+    event.preventDefault();
+    if (!session) return;
+    if (!shoppingName.trim()) {
+      setMessage("請先填寫購物項目名稱。");
+      return;
+    }
+    const quantity = Number(shoppingQuantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      setMessage("數量必須大於 0。");
+      return;
+    }
+    const estimated = shoppingEstimatedPrice.trim() === "" ? null : Number(shoppingEstimatedPrice);
+    const actual = shoppingActualPrice.trim() === "" ? null : Number(shoppingActualPrice);
+    if ((estimated !== null && (!Number.isFinite(estimated) || estimated < 0)) ||
+        (actual !== null && (!Number.isFinite(actual) || actual < 0))) {
+      setMessage("金額請填寫 0 或大於 0 的數字。");
+      return;
+    }
+
+    setShoppingBusy(true);
+    setMessage("");
+    const payload = {
+      item_name: shoppingName.trim(),
+      category: shoppingCategory,
+      trip_id: shoppingTripId === "all" ? null : shoppingTripId,
+      quantity,
+      unit: shoppingUnit.trim() || null,
+      currency: shoppingCurrency,
+      estimated_unit_price: estimated,
+      actual_unit_price: actual,
+      notes: shoppingNotes.trim() || null,
+    };
+    const result = shoppingEditingId
+      ? await supabase.from("shopping_items").update(payload).eq("id", shoppingEditingId)
+      : await supabase.from("shopping_items").insert({ ...payload, user_id: session.user.id });
+    setShoppingBusy(false);
+    if (result.error) {
+      setMessage("購物清單儲存失敗：" + result.error.message);
+      return;
+    }
+    setShoppingFormOpen(false);
+    resetShoppingForm();
+    await loadData();
+  }
+
+  async function toggleShoppingPurchased(item: ShoppingItem, purchased: boolean) {
+    setShoppingItems(previous => previous.map(row => row.id === item.id ? { ...row, is_purchased: purchased } : row));
+    const { error } = await supabase.from("shopping_items").update({ is_purchased: purchased }).eq("id", item.id);
+    if (error) {
+      setShoppingItems(previous => previous.map(row => row.id === item.id ? { ...row, is_purchased: item.is_purchased } : row));
+      setMessage("更新購買狀態失敗：" + error.message);
+    }
+  }
+
+  async function deleteShoppingItem(item: ShoppingItem) {
+    if (!confirm("確定刪除購物項目「" + item.item_name + "」？")) return;
+    const { error } = await supabase.from("shopping_items").delete().eq("id", item.id);
+    if (error) setMessage("刪除購物項目失敗：" + error.message);
+    else {
+      setMessage("");
+      setShoppingItems(previous => previous.filter(row => row.id !== item.id));
+    }
+  }
+
   async function signOut() { await supabase.auth.signOut(); setTrips([]); setItems([]); }
 
   const tripCityOptions = LOCATION_OPTIONS[tripCountry] ? Object.keys(LOCATION_OPTIONS[tripCountry]) : [];
   const placeCityOptions = LOCATION_OPTIONS[placeCountry] ? Object.keys(LOCATION_OPTIONS[placeCountry]) : [];
   const placeRegionOptions = LOCATION_OPTIONS[placeCountry]?.[placeCity] || [];
+
+  const filteredShoppingItems = useMemo(() => shoppingItems.filter(item => {
+    const matchesTrip = selectedTrip === "all" || item.trip_id === selectedTrip;
+    const searchTarget = [item.item_name, item.category, item.notes, item.unit].join(" ").toLowerCase();
+    return matchesTrip && searchTarget.includes(shoppingSearch.trim().toLowerCase());
+  }), [shoppingItems, selectedTrip, shoppingSearch]);
+
+  const shoppingTotals = useMemo(() => {
+    const totals = new Map<string, { estimated: number; actual: number }>();
+    for (const item of filteredShoppingItems) {
+      const current = totals.get(item.currency) || { estimated: 0, actual: 0 };
+      const quantity = Number(item.quantity || 0);
+      current.estimated += quantity * Number(item.estimated_unit_price || 0);
+      current.actual += quantity * Number(item.actual_unit_price || 0);
+      totals.set(item.currency, current);
+    }
+    return Array.from(totals.entries()).map(([currency, values]) => ({ currency, ...values }));
+  }, [filteredShoppingItems]);
 
   const filtered = useMemo(() => items.filter(item => {
     const matchesTrip = selectedTrip === "all" || item.trip_id === selectedTrip;
