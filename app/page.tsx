@@ -5,7 +5,7 @@ import type { FormEvent } from "react";
 import { getSupabase } from "@/lib/supabase";
 
 type Trip = { id: string; title: string; country: string | null; city: string | null; start_date: string | null; end_date: string | null; created_at: string };
-type Collection = { id: string; trip_id: string | null; place_name: string; country: string | null; city: string | null; region: string | null; category: string; address: string | null; source_url: string | null; notes: string | null; image_path: string | null; google_place_id: string | null; created_at: string; image_url?: string | null };
+type Collection = { id: string; trip_id: string | null; place_name: string; country: string | null; city: string | null; region: string | null; category: string; address: string | null; source_url: string | null; notes: string | null; image_path: string | null; google_place_id: string | null; visited: boolean; experience_rating: number | null; created_at: string; image_url?: string | null };
 type GoogleAddressComponent = { longText?: string; shortText?: string; types?: string[] };
 type GooglePlace = { id: string; displayName: string; formattedAddress: string; googleMapsUri: string; addressComponents?: GoogleAddressComponent[] };
 type GoogleLocationGuess = { country: string; city: string; municipality: string; region: string };
@@ -112,6 +112,22 @@ const LOCATION_OPTIONS: Record<string, Record<string, string[]>> = {
 };
 const COUNTRY_OPTIONS = Object.keys(LOCATION_OPTIONS);
 const categories = ["景點", "美食", "購物", "住宿", "交通", "其他"];
+const EXPERIENCE_RATINGS: Record<string, { question: string; options: string[] }> = {
+  "景點": { question: "玩起來如何？", options: ["非常好玩", "好玩", "普通", "不好玩"] },
+  "美食": { question: "好不好吃？", options: ["非常好吃", "好吃", "普通", "不好吃"] },
+  "購物": { question: "好不好逛？", options: ["非常好逛", "好逛", "普通", "不好逛"] },
+  "住宿": { question: "住宿體驗如何？", options: ["非常滿意", "滿意", "普通", "不滿意"] },
+  "交通": { question: "交通方便嗎？", options: ["非常方便", "方便", "普通", "不方便"] },
+  "其他": { question: "整體體驗如何？", options: ["非常推薦", "推薦", "普通", "不推薦"] },
+};
+function getGoogleMapsPlaceUrl(placeName: string, placeId: string) {
+  const params = new URLSearchParams({
+    api: "1",
+    query: placeName || placeId,
+    query_place_id: placeId,
+  });
+  return "https://www.google.com/maps/search/?" + params.toString();
+}
 const supabase = getSupabase();
 
 export default function Home() {
@@ -139,6 +155,8 @@ export default function Home() {
   const [placeCity, setPlaceCity] = useState("");
   const [placeRegion, setPlaceRegion] = useState("");
   const [category, setCategory] = useState("景點");
+  const [visited, setVisited] = useState(false);
+  const [experienceRating, setExperienceRating] = useState("");
   const [address, setAddress] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [notes, setNotes] = useState("");
@@ -261,7 +279,7 @@ export default function Home() {
   function startNewCollection() {
     setEditingId(null); setExistingImagePath(null); setPlaceName(""); setPlaceCountry(""); setPlaceCity("");
     setPlaceRegion(""); setPlaceCountryCustom(false); setPlaceCityCustom(false); setPlaceRegionCustom(false);
-    setCategory("景點"); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null);
+    setCategory("景點"); setVisited(false); setExperienceRating(""); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null);
     setGooglePlaceId(null); setSelectedGooglePlace(null); setGoogleMunicipality(""); setShowSaveForm(true);
   }
 
@@ -308,6 +326,8 @@ export default function Home() {
       city: googlePlaceId ? null : (placeCity || null),
       region: googlePlaceId ? null : (placeRegion || null),
       category,
+      visited,
+      experience_rating: visited && experienceRating ? Number(experienceRating) : null,
       address: googlePlaceId ? null : (address || null),
       source_url: sourceUrl || null,
       notes: notes || null, image_path, google_place_id: googlePlaceId
@@ -318,7 +338,7 @@ export default function Home() {
     setBusy(false);
     if (result.error) setMessage(result.error.message);
     else {
-      setPlaceName(""); setPlaceCountry(""); setPlaceCity(""); setPlaceRegion(""); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null); setGoogleMunicipality("");
+      setPlaceName(""); setPlaceCountry(""); setPlaceCity(""); setPlaceRegion(""); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null); setGoogleMunicipality(""); setVisited(false); setExperienceRating("");
       setEditingId(null); setExistingImagePath(null); setGooglePlaceId(null); setSelectedGooglePlace(null); setShowSaveForm(false);
       setMessage(duplicate ? "已新增收藏，但找到名稱及地址相同的既有收藏，請確認是否重複。" : "");
       loadData();
@@ -348,6 +368,8 @@ export default function Home() {
       setAddress(item.address || "");
     }
     setCategory(item.category);
+    setVisited(Boolean(item.visited));
+    setExperienceRating(item.experience_rating ? String(item.experience_rating) : "");
     setSourceUrl(item.source_url || "");
     setNotes(item.notes || "");
     setImageFile(null);
@@ -521,6 +543,16 @@ export default function Home() {
           {!placeCountryCustom && !placeCityCustom && placeCity && placeRegionOptions.length === 0 && <span className="location-hint">此城市目前沒有預設區域清單，可自行輸入行政區或地區。</span>}
         </label>
         <label>分類<select value={category} onChange={e => setCategory(e.target.value)}>{categories.map(c => <option key={c}>{c}</option>)}</select></label>
+        <div className="full-width visit-tracker">
+          <label className="visited-toggle"><input type="checkbox" checked={visited} onChange={e => setVisited(e.target.checked)} /> **已去過**</label>
+          <label className="experience-rating-label">{EXPERIENCE_RATINGS[category]?.question || "整體體驗如何？"}
+            <select value={experienceRating} onChange={e => setExperienceRating(e.target.value)} disabled={!visited}>
+              <option value="">請選擇評價</option>
+              {(EXPERIENCE_RATINGS[category]?.options || EXPERIENCE_RATINGS["其他"].options).map((option, index) => <option key={option} value={String(4 - index)}>{option}</option>)}
+            </select>
+            {!visited && <span className="location-hint">勾選「已去過」後，就可以留下體驗評價。</span>}
+          </label>
+        </div>
         <label className="full-width">地址（選取 Google Maps 地點時自動帶入）<input value={address} onChange={e => setAddress(e.target.value)} placeholder="可稍後補上"/></label>
         <label className="full-width">原始貼文網址<input type="url" value={sourceUrl} onChange={e => setSourceUrl(e.target.value)} placeholder="https://..."/></label>
         <label className="full-width">備註<textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="想吃什麼、注意事項、推薦原因…"/></label>
@@ -534,7 +566,11 @@ export default function Home() {
           {(item as Collection & { image_url?: string | null }).image_url ? <img className="place-image" src={(item as Collection & { image_url?: string | null }).image_url || ""} alt={item.place_name}/> : <div className="image-placeholder">✧</div>}
           <div className="place-body"><div className="place-meta"><span>{item.category}</span><span>{[item.country, item.city, item.region].filter(Boolean).join(" · ")}</span></div>
             <h3>{item.place_name}</h3>{item.address && <p className="muted small-text">{item.address}</p>}{item.notes && <p className="notes">{item.notes}</p>}
-            <div className="place-actions">{item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer">查看原始貼文 ↗</a>}{item.google_place_id && <a href={"https://www.google.com/maps/search/?api=1&query_place_id=" + encodeURIComponent(item.google_place_id)} target="_blank" rel="noreferrer">Google Maps ↗</a>}<span className="action-group"><button className="edit-link" onClick={() => editCollection(item)}>編輯</button><button className="danger-link" onClick={() => deleteCollection(item.id)}>刪除</button></span></div>
+            {(item.visited || item.experience_rating) && <div className="visit-summary">
+              {item.visited && <span className="visited-chip">✓ 已去過</span>}
+              {item.experience_rating && <span className="rating-chip">{EXPERIENCE_RATINGS[item.category]?.options[4 - item.experience_rating] || "已評價"}</span>}
+            </div>}
+            <div className="place-actions">{item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer">查看原始貼文 ↗</a>}{item.google_place_id && <a href={getGoogleMapsPlaceUrl(item.place_name, item.google_place_id)} target="_blank" rel="noreferrer">Google Maps ↗</a>}<span className="action-group"><button className="edit-link" onClick={() => editCollection(item)}>編輯</button><button className="danger-link" onClick={() => deleteCollection(item.id)}>刪除</button></span></div>
             {item.google_place_id && <div className="google-live-block">
               <button type="button" className="outline small" disabled={googleDetailsBusyId === item.google_place_id} onClick={async () => {
                 const placeId = item.google_place_id as string;
