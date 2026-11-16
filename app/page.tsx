@@ -1146,10 +1146,49 @@ export default function Home() {
             </select>
             {!trips.find(t => t.id === selectedTrip)?.duration_days && <span className="location-hint">這個旅行尚未設定天數，請在新增旅行時設定行程天數與夜數。</span>}
           </label>}
-          <label>預約／預計時間
-            <input type="time" value={reservationTime} onChange={e => setReservationTime(e.target.value)} />
-            <span className="location-hint">例如：用餐預約、景點場次或租車取車時間；設定後可依時間排序。</span>
-          </label>
+          <div className="reservation-time-field">
+            <span className="reservation-time-label">預約／預計時間（24 小時制）</span>
+            <div className="reservation-time-control">
+              <label className="reservation-time-part">
+                <span className="tiny muted">小時</span>
+                <select
+                  aria-label="預約時間小時"
+                  value={reservationTime ? reservationTime.slice(0, 2) : ""}
+                  onChange={e => {
+                    const hour = e.target.value;
+                    if (!hour) {
+                      setReservationTime("");
+                    } else {
+                      const minute = reservationTime ? reservationTime.slice(3, 5) : "00";
+                      setReservationTime(hour + ":" + (minute || "00"));
+                    }
+                  }}
+                >
+                  <option value="">HH</option>
+                  {Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0")).map(hour => <option key={hour} value={hour}>{hour}</option>)}
+                </select>
+              </label>
+              <span className="reservation-time-colon">:</span>
+              <label className="reservation-time-part">
+                <span className="tiny muted">分鐘（每 10 分）</span>
+                <select
+                  aria-label="預約時間分鐘"
+                  value={reservationTime ? reservationTime.slice(3, 5) : ""}
+                  disabled={!reservationTime}
+                  onChange={e => {
+                    if (!reservationTime || !e.target.value) return;
+                    setReservationTime(reservationTime.slice(0, 2) + ":" + e.target.value);
+                  }}
+                >
+                  <option value="">MM</option>
+                  {["00", "10", "20", "30", "40", "50"].map(minute => <option key={minute} value={minute}>{minute}</option>)}
+                  {reservationTime && !["00", "10", "20", "30", "40", "50"].includes(reservationTime.slice(3, 5)) && <option value={reservationTime.slice(3, 5)}>{reservationTime.slice(3, 5)}（原時間）</option>}
+                </select>
+              </label>
+              <button type="button" className="outline small reservation-time-clear" disabled={!reservationTime} onClick={() => setReservationTime("")}>清除</button>
+            </div>
+            <span className="location-hint">使用 24 小時制，例如 09:00、14:30；分鐘以 10 分鐘為單位。設定後可依時間排序。</span>
+          </div>
         </>}
         <label>國家
           <select value={placeCountryCustom ? "__custom__" : placeCountry} onChange={e => {
