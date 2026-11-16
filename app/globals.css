@@ -125,3 +125,7 @@ footer a{color:var(--muted);text-decoration:none}
   .shopping-price-grid{grid-template-columns:1fr}
   .app-tab{padding:8px 12px}
 }
+
+.shopping-product-link{margin:7px 0 0;font-size:11px}
+.shopping-product-link a{color:var(--green);font-weight:700;text-decoration:none}
+.shopping-product-link a:hover{text-decoration:underline}
