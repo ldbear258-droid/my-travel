@@ -70,7 +70,7 @@ export default function Home() {
     e.preventDefault(); setBusy(true); setMessage("");
     const result = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
-    if (result.error) setMessage("登入失敗，請確認家庭共用帳號的電子郵件與密碼。");
+    if (result.error) setMessage("登入失敗，請確認你的電子郵件與密碼。");
     else setMessage("登入成功。");
   }
 
