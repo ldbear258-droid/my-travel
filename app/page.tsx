@@ -1206,66 +1206,47 @@ export default function Home() {
       </form>}
 
       <div className="toolbar"><input className="search" value={activePage === "food_drink" ? foodDrinkSearch : search} onChange={e => activePage === "food_drink" ? setFoodDrinkSearch(e.target.value) : setSearch(e.target.value)} placeholder={activePage === "food_drink" ? "⌕ 搜尋餐廳、咖啡店、類型…" : "⌕ 搜尋店家、城市、分類…"}/><span className="muted small-text">共 {activePage === "food_drink" ? filteredFoodDrink.length : filtered.length} 筆</span></div>
-      {(activePage === "food_drink" ? filteredFoodDrink : filtered).length === 0 ? <div className="empty"><div>{activePage === "food_drink" ? "☕" : "⌖"}</div><h3>{activePage === "food_drink" ? "還沒有吃喝收藏" : "還沒有旅行行程收藏"}</h3><p className="muted">{activePage === "food_drink" ? "把平常想吃的餐廳、咖啡店與飲料店收藏在這裡。" : "把旅行中想去的地方收藏起來，再安排到每天行程。"}</p><button className="primary" onClick={() => setShowSaveForm(true)}>{activePage === "food_drink" ? "新增第一筆吃喝收藏" : "新增第一筆行程收藏"}</button></div> :
-        <div className="collection-grid">{(activePage === "food_drink" ? filteredFoodDrink : filtered).map(item => <article className="place-card" key={item.id}>
-          {(item as Collection & { image_url?: string | null }).image_url
-            ? <img className="place-image" src={(item as Collection & { image_url?: string | null }).image_url || ""} alt={item.place_name}/>
-            : item.google_place_id
-              ? <GoogleMapsPlacePhoto placeId={item.google_place_id} placeName={item.place_name}/>
-              : <div className="image-placeholder">✧</div>}
-          <div className="place-body">
-            <div className="place-card-heading">
-              <div className="place-card-heading-main">
-                <div className="place-meta"><span>{item.category}</span><span>{[item.country, item.city, item.region].filter(Boolean).join(" · ")}</span>{item.collection_scope === "travel" && item.itinerary_day && <span className="itinerary-day-chip">第 {item.itinerary_day} 天</span>}</div>
-                <h3>{item.place_name}</h3>
-              </div>
-              <div className="card-visit-controls">
-                <label className="card-visited-toggle">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(item.visited)}
-                    disabled={inlineSavingIds.includes(item.id)}
-                    onChange={event => updateInlineVisit(item, event.target.checked, event.target.checked ? item.experience_rating : null)}
-                    aria-label={item.place_name + " 已去過"}
-                  />
-                  <span>已去過</span>
-                </label>
-                <select
-                  className="card-rating-select"
-                  value={item.experience_rating ? String(item.experience_rating) : ""}
-                  disabled={!item.visited || inlineSavingIds.includes(item.id)}
-                  onChange={event => updateInlineVisit(item, true, event.target.value ? Number(event.target.value) : null)}
-                  aria-label={EXPERIENCE_RATINGS[item.category]?.question || "整體體驗評價"}
-                  title={!item.visited ? "先勾選已去過，再留下評價" : EXPERIENCE_RATINGS[item.category]?.question}
-                >
-                  <option value="">{item.visited ? "選擇評價" : "尚未去過"}</option>
-                  {(EXPERIENCE_RATINGS[item.category]?.options || EXPERIENCE_RATINGS["其他"].options).map((option, index) => (
-                    <option key={option} value={String(4 - index)}>{option}</option>
-                  ))}
-                </select>
-                {inlineSavingIds.includes(item.id) && <span className="card-save-state">儲存中…</span>}
-              </div>
-            </div>
-            {item.address && <p className="muted small-text">{item.address}</p>}{item.notes && <p className="notes">{item.notes}</p>}
-            <div className="place-actions">{item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer">查看原始貼文 ↗</a>}{item.google_place_id && <a href={getGoogleMapsPlaceUrl(item.place_name, item.google_place_id)} target="_blank" rel="noreferrer">Google Maps ↗</a>}<span className="action-group"><button className="edit-link" onClick={() => editCollection(item)}>編輯</button><button className="danger-link" onClick={() => deleteCollection(item.id)}>刪除</button></span></div>
-            {item.google_place_id && <div className="google-live-block">
-              <button type="button" className="outline small" disabled={googleDetailsBusyId === item.google_place_id} onClick={async () => {
-                const placeId = item.google_place_id as string;
-                if (expandedGooglePlaceId === placeId) { setExpandedGooglePlaceId(null); return; }
-                setExpandedGooglePlaceId(placeId);
-                if (!googleDetailsCache[placeId]) await fetchGooglePlaceDetails(placeId);
-              }}>{googleDetailsBusyId === item.google_place_id ? "查詢中…" : expandedGooglePlaceId === item.google_place_id ? "隱藏即時地點資料" : "顯示 Google Maps 即時地點資料"}</button>
-              {expandedGooglePlaceId === item.google_place_id && googleDetailsCache[item.google_place_id] && <div className="google-selected">
-                <strong>Google Maps 即時辨識</strong>
-                <span>{googleDetailsCache[item.google_place_id].displayName}</span>
-                <span className="muted small-text">{[normalizeGoogleLocation(googleDetailsCache[item.google_place_id]).country, normalizeGoogleLocation(googleDetailsCache[item.google_place_id]).city, normalizeGoogleLocation(googleDetailsCache[item.google_place_id]).municipality, normalizeGoogleLocation(googleDetailsCache[item.google_place_id]).region].filter(Boolean).join(" · ")}</span>
-                <span className="muted small-text">{googleDetailsCache[item.google_place_id].formattedAddress}</span>
-                <span className="google-attribution" translate="no">Google Maps</span>
-              </div>}
-            </div>}
+
+      {activePage === "collections" ? <>
+        <div className="itinerary-sort-toolbar">
+          <label>行程排列方式
+            <select value={itinerarySortMode} onChange={event => setItinerarySortMode(event.target.value as "custom" | "time")}>
+              <option value="custom">自訂排序（可拖曳）</option>
+              <option value="time">依預約／預計時間排序</option>
+            </select>
+          </label>
+          <span className="itinerary-sort-hint">{itinerarySortMode === "custom" ? "可拖曳卡片，或使用卡片上的上下箭頭；順序會自動儲存。" : "已設定時間的地點會由早到晚排列，未設定時間的地點會排在後面。"}</span>
+          {itineraryOrderSaving && <span className="muted small-text">正在儲存排序…</span>}
+        </div>
+        {itineraryGroups.length === 0 ? (
+          <div className="empty"><div>⌖</div><h3>還沒有旅行行程收藏</h3><p className="muted">把旅行中想去的地方收藏起來，再安排到每天行程。</p><button className="primary" onClick={() => setShowSaveForm(true)}>新增第一筆行程收藏</button></div>
+        ) : (
+          <div className="itinerary-groups">
+            {itineraryGroups.map(group => (
+              <section className="itinerary-day-section" key={group.key}>
+                <header className="itinerary-day-header">
+                  <div className="itinerary-day-title-block">
+                    <span className="itinerary-day-kicker">{group.day ? "DAY " + String(group.day).padStart(2, "0") : "UNSCHEDULED"}</span>
+                    <h3>{group.day ? "第 " + group.day + " 天" : "尚未安排日期"}</h3>
+                    {selectedTrip === "all" && <span className="itinerary-trip-name">{group.tripTitle}</span>}
+                  </div>
+                  <div className="itinerary-day-header-actions">
+                    <span>{group.items.length} 個地點</span>
+                    <button type="button" className="outline small" onClick={() => addPlaceToItineraryDay(group.tripId, group.day)}>＋ 新增地點</button>
+                  </div>
+                </header>
+                {group.items.length > 0
+                  ? <div className="collection-grid">{group.items.map(item => renderCollectionCard(item, group.items))}</div>
+                  : <div className="itinerary-empty-day">這一天還沒有安排地點，可以先新增收藏。</div>}
+              </section>
+            ))}
           </div>
-        </article>)}</div>}
-      </>}
+        )}
+      </> : (
+        filteredFoodDrink.length === 0
+          ? <div className="empty"><div>☕</div><h3>還沒有吃喝收藏</h3><p className="muted">把平常想吃的餐廳、咖啡店與飲料店收藏在這裡。</p><button className="primary" onClick={() => setShowSaveForm(true)}>新增第一筆吃喝收藏</button></div>
+          : <div className="collection-grid">{filteredFoodDrink.map(item => renderCollectionCard(item))}</div>
+      )}      </>}
 
       {activePage === "shopping" && <section className="shopping-page">
         <section className="section-heading collection-heading">
