@@ -28,6 +28,7 @@ create table if not exists public.collections (
   source_url text,
   notes text,
   image_path text,
+  google_place_id text, -- Google Places ID only; Places business content is not persisted
   created_at timestamptz not null default now()
 );
 
@@ -155,3 +156,6 @@ using (
 -- from auth.users
 -- where email in ('member1@example.com', 'member2@example.com')
 -- on conflict (user_id) do update set household_id = excluded.household_id;
+
+-- Existing installations: add the Google Place ID field without changing existing rows.
+alter table public.collections add column if not exists google_place_id text;
