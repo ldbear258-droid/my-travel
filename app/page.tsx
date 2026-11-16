@@ -190,7 +190,7 @@ export default function Home() {
     const result = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
     if (result.error) setMessage("登入失敗，請確認你的電子郵件與密碼。");
-    else setMessage("登入成功。");
+    else setMessage("");
   }
 
   async function searchGoogleMaps(e: FormEvent) {
@@ -274,8 +274,11 @@ export default function Home() {
     setPlaceName(googleQuery.trim());
     applyGooglePlaceToForm(place);
     setGoogleMessage("");
-    setMessage("已選取 Google Maps 地點，國家、縣市、可辨識區域及地址已自動帶入。");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Successful selection stays quiet; bring the newly opened form into view instead of jumping to page top.
+    setMessage("");
+    window.requestAnimationFrame(() => {
+      document.getElementById("save-collection-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   async function createTrip(e: FormEvent) {
@@ -284,7 +287,7 @@ export default function Home() {
     const { error } = await supabase.from("trips").insert({ user_id: session.user.id, title: tripTitle, country: tripCountry || null, city: tripCity || null });
     setBusy(false);
     if (error) setMessage(error.message);
-    else { setTripTitle(""); setTripCountry(""); setTripCity(""); setTripCountryCustom(false); setTripCityCustom(false); setShowTripForm(false); setMessage("旅行專案已建立"); loadData(); }
+    else { setTripTitle(""); setTripCountry(""); setTripCity(""); setTripCountryCustom(false); setTripCityCustom(false); setShowTripForm(false); setMessage(""); loadData(); }
   }
 
   async function saveCollection(e: FormEvent) {
@@ -320,7 +323,7 @@ export default function Home() {
     else {
       setPlaceName(""); setPlaceCountry(""); setPlaceCity(""); setPlaceRegion(""); setAddress(""); setSourceUrl(""); setNotes(""); setImageFile(null); setGoogleMunicipality("");
       setEditingId(null); setExistingImagePath(null); setGooglePlaceId(null); setSelectedGooglePlace(null); setShowSaveForm(false);
-      setMessage(editingId ? "收藏已更新，家庭成員都能看到。" : duplicate ? "已新增收藏。提醒：找到名稱及地址相同的既有收藏，請確認是否重複。" : "收藏成功，已加入家庭共用清單！");
+      setMessage(duplicate ? "已新增收藏，但找到名稱及地址相同的既有收藏，請確認是否重複。" : "");
       loadData();
     }
   }
@@ -371,14 +374,14 @@ export default function Home() {
       return;
     }
     if (selectedTrip === trip.id) setSelectedTrip("all");
-    setMessage(`旅行「${trip.title}」已刪除；原有收藏已保留在「全部收藏」。`);
+    setMessage("");
     await loadData();
   }
 
   async function deleteCollection(id: string) {
     if (!confirm("確定刪除這筆收藏？")) return;
     const { error } = await supabase.from("collections").delete().eq("id", id);
-    if (error) setMessage(error.message); else { setMessage("已刪除收藏"); loadData(); }
+    if (error) setMessage(error.message); else { setMessage(""); loadData(); }
   }
 
   async function signOut() { await supabase.auth.signOut(); setTrips([]); setItems([]); }
@@ -478,7 +481,7 @@ export default function Home() {
           <div className="google-attribution" translate="no">Google Maps</div>
         </div>}
       </section>
-      {showSaveForm && <form className="panel form-grid" onSubmit={saveCollection}>
+      {showSaveForm && <form id="save-collection-form" className="panel form-grid" onSubmit={saveCollection}>
         <div className="full-width"><h3>{editingId ? "編輯旅行收藏" : "新增一筆旅行收藏"}</h3><p className="muted small-text">選取 Google Maps 地點後，國家、縣市、可辨識的區域及地址會自動帶入供即時確認。為符合 Google Maps 資料使用規範，資料庫只保存 Google Place ID；收藏卡片可按需重新查詢最新地點資料。自行建立的收藏仍可保存你手動輸入的地區與地址。</p></div>
         {selectedGooglePlace && <div className="full-width google-selected"><strong>已選取 Google Maps 地點</strong><span>{selectedGooglePlace.displayName}</span><span className="muted small-text">{selectedGooglePlace.formattedAddress}</span>{googleMunicipality && <span className="muted small-text">市町村／行政區：{googleMunicipality}</span>}<a href={selectedGooglePlace.googleMapsUri} target="_blank" rel="noreferrer">Google Maps ↗</a><p className="tiny muted">國家、縣市、可辨識區域及地址已自動帶入。這些 Google Maps 資料僅供即時確認，不會寫入資料庫；My Travel 只保存 Place ID。</p></div>}
         {googlePlaceId && !selectedGooglePlace && <div className="full-width google-selected"><span>這筆收藏已連結 Google Maps 地點。</span></div>}
