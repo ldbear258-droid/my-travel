@@ -289,7 +289,7 @@ export default function Home() {
     setGooglePlaceId(place.id);
     setSelectedGooglePlace(place);
     setGoogleDetailsCache(previous => ({ ...previous, [place.id]: place }));
-    // The search phrase remains the user's own collection title. Google place data is displayed live only.
+    // Keep the user's search phrase as their editable collection title; Google name is shown live above only.
     setPlaceName(googleQuery.trim());
     applyGooglePlaceToForm(place);
     setGoogleMessage("");
@@ -526,9 +526,9 @@ export default function Home() {
       </section>
       {showSaveForm && <form id="save-collection-form" className="panel form-grid" onSubmit={saveCollection}>
         <div className="full-width"><h3>{editingId ? "編輯旅行收藏" : "新增一筆旅行收藏"}</h3><p className="muted small-text">選取 Google Maps 地點後，國家、縣市、可辨識的區域及地址會自動帶入供即時確認。為符合 Google Maps 資料使用規範，資料庫只保存 Google Place ID；收藏卡片可按需重新查詢最新地點資料。自行建立的收藏仍可保存你手動輸入的地區與地址。</p></div>
-        {selectedGooglePlace && <div className="full-width google-selected"><strong>已選取 Google Maps 地點</strong><span>{selectedGooglePlace.displayName}</span><span className="muted small-text">{selectedGooglePlace.formattedAddress}</span>{googleMunicipality && <span className="muted small-text">市町村／行政區：{googleMunicipality}</span>}<a href={selectedGooglePlace.googleMapsUri} target="_blank" rel="noreferrer">Google Maps ↗</a><p className="tiny muted">國家、縣市、可辨識區域及地址已自動帶入。這些 Google Maps 資料僅供即時確認，不會寫入資料庫；My Travel 只保存 Place ID。</p></div>}
+        {selectedGooglePlace && <div className="full-width google-selected"><strong>已選取 Google Maps 地點</strong><span className="google-source-label">Google Maps 原始店名（即時資料）</span><span className="google-source-name">{selectedGooglePlace.displayName}</span><span className="muted small-text">{selectedGooglePlace.formattedAddress}</span>{googleMunicipality && <span className="muted small-text">市町村／行政區：{googleMunicipality}</span>}<a href={selectedGooglePlace.googleMapsUri} target="_blank" rel="noreferrer">Google Maps ↗</a><p className="tiny muted">上方名稱與地址來自 Google Maps，即時顯示供你核對；資料庫只保存 Google Place ID。</p></div>}
         {googlePlaceId && !selectedGooglePlace && <div className="full-width google-selected"><span>這筆收藏已連結 Google Maps 地點。</span></div>}
-        <label>地點／店家名稱 *<input required value={placeName} onChange={e => setPlaceName(e.target.value)} placeholder="例如：美麗海水族館"/></label>
+        <label>我的收藏名稱 *<input required value={placeName} onChange={e => setPlaceName(e.target.value)} placeholder="輸入你想在收藏清單顯示的名稱"/>{selectedGooglePlace && <span className="location-hint">上方是 Google Maps 原始店名；這裡填寫你自己的收藏名稱，可自由修改。</span>}</label>
         <label>所屬旅行<select value={selectedTrip} onChange={e => setSelectedTrip(e.target.value)}><option value="all">暫不指定／全部收藏</option>{trips.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select></label>
         <label>國家
           <select value={placeCountryCustom ? "__custom__" : placeCountry} onChange={e => {
