@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { getSupabase } from "@/lib/supabase";
 
@@ -8,6 +8,8 @@ type Trip = { id: string; title: string; country: string | null; city: string | 
 type Collection = { id: string; trip_id: string | null; place_name: string; country: string | null; city: string | null; region: string | null; category: string; address: string | null; source_url: string | null; notes: string | null; image_path: string | null; google_place_id: string | null; visited: boolean; experience_rating: number | null; created_at: string; image_url?: string | null };
 type GoogleAddressComponent = { longText?: string; shortText?: string; types?: string[] };
 type GooglePlace = { id: string; displayName: string; formattedAddress: string; googleMapsUri: string; addressComponents?: GoogleAddressComponent[] };
+type GooglePhotoAuthor = { displayName?: string; uri?: string; photoUri?: string };
+type GooglePlacePhoto = { name: string; widthPx?: number; heightPx?: number; googleMapsUri?: string; authorAttributions?: GooglePhotoAuthor[] };
 type GoogleLocationGuess = { country: string; city: string; municipality: string; region: string };
 
 function getGoogleComponent(components: GoogleAddressComponent[] = [], ...types: string[]) {
@@ -129,6 +131,125 @@ function getGoogleMapsPlaceUrl(placeName: string, placeId: string) {
   return "https://www.google.com/maps/search/?" + params.toString();
 }
 const supabase = getSupabase();
+
+function GoogleMapsPlacePhoto({ placeId, placeName }: { placeId: string; placeName: string }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [photo, setPhoto] = useState<{ url: string; googleMapsUri: string; authors: GooglePhotoAuthor[] } | null>(null);
+  const [status, setStatus] = useState<"waiting" | "loading" | "missing" | "error">("waiting");
+
+  useEffect(() => {
+    let disposed = false;
+    let objectUrl = "";
+    let started = false;
+    let observer: IntersectionObserver | null = null;
+
+    async function loadPhoto() {
+      if (started) return;
+      started = true;
+      setStatus("loading");
+      try {
+        const { data: authData } = await supabase.auth.getSession();
+        const accessToken = authData.session?.access_token;
+        if (!accessToken) throw new Error("登入狀態已失效。");
+
+        const detailsResponse = await fetch("/api/places/details", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + accessToken },
+          body: JSON.stringify({ placeId, includePhotos: true }),
+          cache: "no-store",
+        });
+        const detailsResult = await detailsResponse.json();
+        if (!detailsResponse.ok) throw new Error(detailsResult.error || "無法取得地點相片資料。");
+
+        const photoData = (detailsResult.place?.photos || []) as GooglePlacePhoto[];
+        const firstPhoto = photoData.find(item => Boolean(item.name));
+        if (!firstPhoto?.name) {
+          if (!disposed) setStatus("missing");
+          return;
+        }
+
+        const imageResponse = await fetch("/api/places/photo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + accessToken },
+          body: JSON.stringify({ placeId, photoName: firstPhoto.name }),
+          cache: "no-store",
+        });
+        if (!imageResponse.ok) {
+          const errorResult = await imageResponse.json().catch(() => ({}));
+          throw new Error(errorResult.error || "無法載入 Google Maps 相片。");
+        }
+
+        const imageBlob = await imageResponse.blob();
+        if (!imageBlob.type.toLowerCase().startsWith("image/")) throw new Error("Google Maps 沒有回傳可顯示的圖片。");
+        objectUrl = URL.createObjectURL(imageBlob);
+        if (disposed) {
+          URL.revokeObjectURL(objectUrl);
+          objectUrl = "";
+          return;
+        }
+        setPhoto({
+          url: objectUrl,
+          googleMapsUri: firstPhoto.googleMapsUri || getGoogleMapsPlaceUrl(placeName, placeId),
+          authors: firstPhoto.authorAttributions || [],
+        });
+      } catch {
+        if (!disposed) setStatus("error");
+      }
+    }
+
+    const element = containerRef.current;
+    if (!element) return;
+    if (typeof IntersectionObserver === "undefined") {
+      void loadPhoto();
+    } else {
+      observer = new IntersectionObserver(entries => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          observer?.disconnect();
+          void loadPhoto();
+        }
+      }, { rootMargin: "160px 0px" });
+      observer.observe(element);
+    }
+
+    return () => {
+      disposed = true;
+      observer?.disconnect();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [placeId, placeName]);
+
+  const attributionAuthors = photo?.authors || [];
+  return (
+    <div className="google-photo-wrap" ref={containerRef}>
+      {photo ? (
+        <>
+          <a className="google-photo-image-link" href={photo.googleMapsUri} target="_blank" rel="noreferrer" aria-label={"在 Google Maps 查看 " + placeName + " 的原始相片"}>
+            <img className="google-photo-image" src={photo.url} alt={placeName + " 的 Google Maps 相片"} />
+          </a>
+          <div className="google-photo-attribution">
+            <a href={photo.googleMapsUri} target="_blank" rel="noreferrer" translate="no">Google Maps</a>
+            {attributionAuthors.map((author, index) => {
+              const profileUrl = author.uri ? (author.uri.startsWith("//") ? "https:" + author.uri : author.uri) : "";
+              const avatarUrl = author.photoUri ? (author.photoUri.startsWith("//") ? "https:" + author.photoUri : author.photoUri) : "";
+              return profileUrl ? (
+                <a className="google-photo-author" href={profileUrl} target="_blank" rel="noreferrer" key={profileUrl + index}>
+                  {avatarUrl && <img src={avatarUrl} alt="" />}
+                  <span>{author.displayName || "相片作者"}</span>
+                </a>
+              ) : author.displayName ? <span key={author.displayName + index}>{author.displayName}</span> : null;
+            })}
+          </div>
+        </>
+      ) : (
+        <div className="google-photo-placeholder">
+          <span>✧</span>
+          <small>{status === "loading" ? "Google Maps 相片載入中…" : status === "missing" ? "目前沒有可提供的 Google Maps 相片" : status === "error" ? "Google Maps 相片暫時無法載入" : "Google Maps 相片"}</small>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 export default function Home() {
   const [session, setSession] = useState<any>(null);
@@ -587,7 +708,11 @@ export default function Home() {
       <div className="toolbar"><input className="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="⌕ 搜尋店家、城市、分類…"/><span className="muted small-text">共 {filtered.length} 筆</span></div>
       {filtered.length === 0 ? <div className="empty"><div>⌖</div><h3>還沒有收藏地點</h3><p className="muted">把看到的好地方先收藏起來，慢慢建立你的旅行資料庫。</p><button className="primary" onClick={() => setShowSaveForm(true)}>新增第一筆收藏</button></div> :
         <div className="collection-grid">{filtered.map(item => <article className="place-card" key={item.id}>
-          {(item as Collection & { image_url?: string | null }).image_url ? <img className="place-image" src={(item as Collection & { image_url?: string | null }).image_url || ""} alt={item.place_name}/> : <div className="image-placeholder">✧</div>}
+          {(item as Collection & { image_url?: string | null }).image_url
+            ? <img className="place-image" src={(item as Collection & { image_url?: string | null }).image_url || ""} alt={item.place_name}/>
+            : item.google_place_id
+              ? <GoogleMapsPlacePhoto placeId={item.google_place_id} placeName={item.place_name}/>
+              : <div className="image-placeholder">✧</div>}
           <div className="place-body">
             <div className="place-card-heading">
               <div className="place-card-heading-main">
