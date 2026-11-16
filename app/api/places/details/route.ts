@@ -4,12 +4,21 @@ import { createClient } from "@supabase/supabase-js";
 export const runtime = "nodejs";
 
 type GoogleAddressComponent = { longText?: string; shortText?: string; types?: string[] };
+type GooglePhotoAuthor = { displayName?: string; uri?: string; photoUri?: string };
+type GooglePlacePhoto = {
+  name?: string;
+  widthPx?: number;
+  heightPx?: number;
+  googleMapsUri?: string;
+  authorAttributions?: GooglePhotoAuthor[];
+};
 type GooglePlaceApiResult = {
   id?: string;
   displayName?: { text?: string };
   formattedAddress?: string;
   googleMapsUri?: string;
   addressComponents?: GoogleAddressComponent[];
+  photos?: GooglePlacePhoto[];
 };
 
 export async function POST(request: Request) {
@@ -35,10 +44,11 @@ export async function POST(request: Request) {
     .from("household_members").select("user_id").eq("user_id", authData.user.id).maybeSingle();
   if (membershipError || !membership) return NextResponse.json({ error: "此帳號尚未加入家庭收藏空間。" }, { status: 403 });
 
-  let body: { placeId?: unknown };
+  let body: { placeId?: unknown; includePhotos?: unknown };
   try { body = await request.json(); }
   catch { return NextResponse.json({ error: "地點資料格式不正確。" }, { status: 400 }); }
   const placeId = typeof body.placeId === "string" ? body.placeId.trim() : "";
+  const includePhotos = body.includePhotos === true;
   if (!placeId || placeId.length > 300 || placeId.includes("/")) {
     return NextResponse.json({ error: "Google Place ID 格式不正確。" }, { status: 400 });
   }
@@ -50,7 +60,9 @@ export async function POST(request: Request) {
         method: "GET",
         headers: {
           "X-Goog-Api-Key": googleApiKey,
-          "X-Goog-FieldMask": "id,displayName,formattedAddress,addressComponents,googleMapsUri",
+          "X-Goog-FieldMask": includePhotos
+            ? "id,displayName,formattedAddress,addressComponents,googleMapsUri,photos.name,photos.widthPx,photos.heightPx,photos.googleMapsUri,photos.authorAttributions"
+            : "id,displayName,formattedAddress,addressComponents,googleMapsUri",
         },
         cache: "no-store",
       }
@@ -69,6 +81,19 @@ export async function POST(request: Request) {
         formattedAddress: place.formattedAddress || "",
         googleMapsUri: place.googleMapsUri || "https://www.google.com/maps/search/?api=1&query_place_id=" + encodeURIComponent(placeId),
         addressComponents: place.addressComponents || [],
+        ...(includePhotos ? {
+          photos: (place.photos || []).slice(0, 3).filter(photo => Boolean(photo.name)).map(photo => ({
+            name: photo.name,
+            widthPx: photo.widthPx,
+            heightPx: photo.heightPx,
+            googleMapsUri: photo.googleMapsUri || "",
+            authorAttributions: (photo.authorAttributions || []).map(author => ({
+              displayName: author.displayName || "",
+              uri: author.uri || "",
+              photoUri: author.photoUri || "",
+            })),
+          })),
+        } : {}),
       },
     }, { headers: { "Cache-Control": "no-store" } });
   } catch {
