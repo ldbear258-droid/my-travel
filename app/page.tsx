@@ -512,7 +512,7 @@ export default function Home() {
     e.preventDefault(); if (!session) return;
     if (!placeName.trim()) { setMessage("請先填寫地點或店家名稱"); return; }
     setBusy(true); setMessage("");
-    const duplicate = items.find(x => x.id !== editingId && ((googlePlaceId && x.google_place_id === googlePlaceId) || (x.place_name.trim().toLocaleLowerCase() === placeName.trim().toLocaleLowerCase() && (x.address || "").trim().toLocaleLowerCase() === address.trim().toLocaleLowerCase())));
+    const duplicate = items.find(x => x.id !== editingId && x.collection_scope === collectionScope && ((googlePlaceId && x.google_place_id === googlePlaceId) || (x.place_name.trim().toLocaleLowerCase() === placeName.trim().toLocaleLowerCase() && (x.address || "").trim().toLocaleLowerCase() === address.trim().toLocaleLowerCase())));
     let image_path: string | null = existingImagePath;
     if (imageFile) {
       const safeName = imageFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -870,9 +870,9 @@ export default function Home() {
         <div className="form-actions"><button className="primary" disabled={busy}>儲存專案</button><button type="button" className="outline" onClick={() => setShowTripForm(false)}>取消</button></div>
       </form>}
       <div className="trip-grid">
-        <button className={`trip-card all-card ${selectedTrip === "all" ? "selected" : ""}`} onClick={() => setSelectedTrip("all")}><span className="trip-icon">✧</span><strong>全部收藏</strong><span>{items.length} 個地點</span></button>
+        <button className={`trip-card all-card ${selectedTrip === "all" ? "selected" : ""}`} onClick={() => { setSelectedTrip("all"); setItineraryDay(""); }}><span className="trip-icon">✧</span><strong>全部收藏</strong><span>{items.length} 個地點</span></button>
         {trips.map(trip => <div key={trip.id} className="trip-card-wrap">
-          <button className={`trip-card ${selectedTrip === trip.id ? "selected" : ""}`} onClick={() => setSelectedTrip(trip.id)}>
+          <button className={`trip-card ${selectedTrip === trip.id ? "selected" : ""}`} onClick={() => { setSelectedTrip(trip.id); setItineraryDay(""); }}>
             <span className="trip-icon">⌁</span><strong>{trip.title}</strong><span>{[trip.country, trip.city].filter(Boolean).join(" · ") || "尚未設定地區"}</span>
             {trip.duration_days && trip.duration_nights !== null && <small className="trip-duration">{trip.duration_days} 天 {trip.duration_nights} 夜</small>}
             <small>{items.filter(x => x.trip_id === trip.id && x.collection_scope === "travel").length} 個收藏</small>
